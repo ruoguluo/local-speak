@@ -155,6 +155,7 @@
   .bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .1s linear; }
   .times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .dl-btn { flex: 0 0 auto; white-space: nowrap; }
+  .dl-btn.busy { color: var(--danger); }
   .dl-btn:disabled { color: var(--ink-3); cursor: not-allowed; text-decoration: none; }
 
   details { margin-top: 4px; }
@@ -452,6 +453,7 @@ function clearDoc() {
 
 async function selectItem(i, { autoplay = false } = {}) {
   if (i < 0 || i >= S.queue.length) return;
+  abortExport();          // 换文档时，上一份的导出没有意义了
   const reuseCtx = autoplay && !!S.ctx;   // 自动续播复用 ctx，否则会被自动播放策略拦住
   resetPlayer({ keepCtx: reuseCtx });
   S.cur = i;
@@ -611,16 +613,34 @@ function legacyCopy(text) {
   if (!ok) throw new Error('浏览器拒绝了复制请求');
 }
 
-/* 边收边显示进度，收完再触发下载——比让浏览器干等一个无 Content-Length 的响应更清楚 */
+/* 边收边显示进度，收完再触发下载——比让浏览器干等一个无 Content-Length 的响应更清楚。
+   生成过程中再点一次按钮就是取消：中断请求会让服务端写 socket 失败，从而停止合成。 */
+let exportCtl = null;
+
+function abortExport() {
+  if (exportCtl) {
+    exportCtl.abort();
+    exportCtl = null;
+  }
+}
+
 async function downloadMp3() {
   if (!S.doc) return;
   const btn = $('#download');
-  const label = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '生成中…';
+
+  if (exportCtl) {          // 正在生成 → 这次点击是取消
+    abortExport();
+    return;
+  }
+
+  const label = '下载 MP3';
+  const ctl = new AbortController();
+  exportCtl = ctl;
+  btn.classList.add('busy');
+  btn.textContent = '取消生成';
   try {
     const q = `voice=${encodeURIComponent(S.voice)}&model=${encodeURIComponent(S.model)}`;
-    const res = await fetch(`/api/export/${S.doc.id}?${q}`);
+    const res = await fetch(`/api/export/${S.doc.id}?${q}`, { signal: ctl.signal });
     if (!res.ok) {
       const e = await res.json().catch(() => ({ error: '导出失败' }));
       throw new Error(e.error);
@@ -634,7 +654,7 @@ async function downloadMp3() {
       if (done) break;
       parts.push(value);
       got += value.length;
-      btn.textContent = `生成中 ${Math.min(99, Math.round((got / est) * 100))}%`;
+      btn.textContent = `取消生成 ${Math.min(99, Math.round((got / est) * 100))}%`;
     }
 
     const blob = new Blob(parts, { type: 'audio/mpeg' });
@@ -648,13 +668,19 @@ async function downloadMp3() {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
     btn.textContent = '已下载';
   } catch (e) {
-    showError(`导出失败：${e.message}`);
-    btn.textContent = label;
+    if (e.name === 'AbortError') {
+      btn.textContent = '已取消';
+    } else {
+      showError(`导出失败：${e.message}`);
+      btn.textContent = label;
+    }
   } finally {
+    if (exportCtl === ctl) exportCtl = null;
+    btn.classList.remove('busy');
     setTimeout(() => {
       btn.textContent = label;
       btn.disabled = !S.doc;
-    }, 1500);
+    }, 1400);
   }
 }
 

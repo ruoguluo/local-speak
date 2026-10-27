@@ -399,11 +399,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Est-Bytes", str(est))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
+        sent = 0
         try:
             for block in mp3_stream(doc, model, voice):
                 self.wfile.write(block)
+                sent += len(block)
         except (BrokenPipeError, ConnectionResetError):
-            pass  # 用户中途取消下载
+            # 客户端点了取消：连接断开，写 socket 立刻失败，生成器随之停止
+            print(f"  导出被取消：{name}（已发送 {sent} 字节）")
         except Exception as exc:
             print(f"  导出失败：{exc}")
 
