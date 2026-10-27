@@ -167,12 +167,21 @@
   .chunk {
     font-size: 13px; line-height: 1.55; color: var(--ink-2);
     padding: 7px 10px; border-radius: 6px; border-left: 2px solid transparent;
-    cursor: pointer; transition: background .12s, color .12s;
+    cursor: pointer;
+    transition: background .12s, color .12s, font-size .16s ease, padding .16s ease;
   }
   .chunk:hover { background: var(--line-soft); color: var(--ink); }
   .chunk .n { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 8px; }
   .chunk.para::after { content: " ¶"; color: var(--accent); }
-  .chunk.active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--ink); }
+  /* 正在朗读的那一块：放大 + 加粗，读到哪里一眼能跟上 */
+  .chunk.active {
+    background: var(--accent-soft);
+    border-left-color: var(--accent);
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 500;
+    padding: 9px 10px;
+  }
 
   .notes { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
   .note { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 6px; }
