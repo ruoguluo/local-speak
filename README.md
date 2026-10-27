@@ -15,6 +15,7 @@
 - 暂停 / 继续停在任意位置，不丢进度
 - 38 个音色，含 Grub the Ogre、The Snow Queen 这类角色音色
 - 笔记：一键记录当前播放位置，点时间戳跳回去重听，可复制成纯文本
+- 一键导出 MP3：把整篇合成为 64 kbps 单声道 MP3 下载，边合成边传输
 - 可只监听本机，也可开放给同网络的其他设备（可选访问令牌）
 
 **命令行**（`pdf_speak.py`）
@@ -36,6 +37,8 @@ python pdf_speak.py book.pdf --dry-run        # 只看断句结果，不发声
   ```
 
 - 语音功能目前**只支持 Apple Silicon 的 macOS**（Ollama 的语音能力尚未覆盖 Windows / Linux）
+
+MP3 导出用 [`lameenc`](https://pypi.org/project/lameenc/)，它自带 LAME 编码器，**不需要系统装 ffmpeg**。
 
 安装 Python 依赖（推荐用项目内虚拟环境，启动脚本会自动优先使用它）：
 

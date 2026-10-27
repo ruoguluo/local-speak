@@ -27,14 +27,20 @@ import wave
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import requests
+
+try:
+    import lameenc  # 自带 LAME，不依赖系统 ffmpeg
+except ImportError:
+    lameenc = None
 
 from pdf_speak import ENDPOINT, SR, load, pause_for, running_heads, to_chunks, to_paragraphs
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
+MP3_BITRATE = 64
 CACHE_PER_DOC = 48  # 每份文档最多缓存多少块音频（约 24MB）
 CACHE_TOTAL = 240   # 所有文档合计上限，约 120MB。播放列表会让文档数变多，必须封顶
 LOCK = threading.Lock()
@@ -93,22 +99,48 @@ def synth_pcm(text: str, model: str, voice: str | None) -> bytes:
     return resp.content
 
 
-def chunk_wav(doc: Doc, i: int, model: str, voice: str | None) -> bytes:
+def chunk_pcm(doc: Doc, i: int, model: str, voice: str | None) -> bytes:
+    """裸 PCM（含停顿填充）。缓存裸流而不是 WAV，导出 MP3 时可直接复用。"""
     key = (voice or "default", model, i)
     if key in doc.audio:
         return doc.audio[key]
     text, para_end = doc.chunks[i]
     pcm = synth_pcm(text, model, voice)
-    pad = b"\x00\x00" * int(SR * pause_for(text, para_end))
+    pcm += b"\x00\x00" * int(SR * pause_for(text, para_end))
+    doc.remember(key, pcm)
+    return pcm
+
+
+def wav_bytes(pcm: bytes) -> bytes:
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SR)
-        w.writeframes(pcm + pad)
-    data = buf.getvalue()
-    doc.remember(key, data)
-    return data
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
+def mp3_stream(doc: Doc, model: str, voice: str | None):
+    """边合成边编码，客户端能立刻开始接收，不必等整篇生成完。"""
+    enc = lameenc.Encoder()
+    enc.set_bit_rate(MP3_BITRATE)
+    enc.set_in_sample_rate(SR)
+    enc.set_channels(1)
+    enc.set_quality(2)
+    for i in range(len(doc.chunks)):
+        block = enc.encode(chunk_pcm(doc, i, model, voice))
+        if block:
+            yield block
+    tail = enc.flush()
+    if tail:
+        yield tail
+
+
+def export_filename(doc: Doc) -> str:
+    stem = Path(doc.name).stem or "audio"
+    safe = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", stem).strip(" ._") or "audio"
+    return f"{safe}.mp3"
 
 
 def list_voices() -> list[str]:
@@ -331,12 +363,49 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 <= idx < len(doc.chunks):
                 return self.send_json({"error": "块号越界"}, 404)
             try:
-                data = chunk_wav(doc, idx, model, voice)
+                data = wav_bytes(chunk_pcm(doc, idx, model, voice))
             except Exception as exc:
                 return self.send_json({"error": str(exc)}, 502)
             return self.send_bytes(data, "audio/wav", cache=True)
 
+        m = re.fullmatch(r"/api/export/([0-9a-f]+)", path)
+        if m:
+            q = parse_qs(urlparse(self.path).query)
+            voice = q.get("voice", [None])[0]
+            model = q.get("model", ["phonon"])[0]
+            doc = DOCS.get(m.group(1))
+            if not doc:
+                return self.send_json({"error": "文档已失效，请重新选择文件"}, 404)
+            if lameenc is None:
+                return self.send_json(
+                    {"error": "服务端缺少 lameenc，请执行 pip install lameenc"}, 503
+                )
+            return self.stream_mp3(doc, model, voice)
+
         self.send_json({"error": "not found"}, 404)
+
+    def stream_mp3(self, doc: "Doc", model: str, voice: str | None) -> None:
+        """HTTP/1.0 下不发 Content-Length，靠关闭连接表示结束，客户端可边收边处理。"""
+        name = export_filename(doc)
+        # 64kbps = 8000 字节/秒。用 17 字符/秒估时长，比 estSec 的 15 更贴近实测，
+        # 进度条才不会早早卡在 99%。
+        est = int(doc.chars / 17 * MP3_BITRATE * 1000 / 8)
+        self.send_response(200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header(
+            "Content-Disposition",
+            f"attachment; filename=\"audio.mp3\"; filename*=UTF-8''{quote(name)}",
+        )
+        self.send_header("X-Est-Bytes", str(est))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        try:
+            for block in mp3_stream(doc, model, voice):
+                self.wfile.write(block)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # 用户中途取消下载
+        except Exception as exc:
+            print(f"  导出失败：{exc}")
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path

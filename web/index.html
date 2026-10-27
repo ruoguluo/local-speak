@@ -154,6 +154,8 @@
   }
   .bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .1s linear; }
   .times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .dl-btn { flex: 0 0 auto; white-space: nowrap; }
+  .dl-btn:disabled { color: var(--ink-3); cursor: not-allowed; text-decoration: none; }
 
   details { margin-top: 4px; }
   summary {
@@ -281,6 +283,7 @@
           <span id="segText">第 0 / 0 段</span>
         </div>
       </div>
+      <button class="link dl-btn" id="download" disabled>下载 MP3</button>
     </div>
   </div>
 
@@ -436,6 +439,7 @@ function renderPlaylist() {
 
 function clearDoc() {
   $('#playBtn').disabled = true;
+  $('#download').disabled = true;
   $('#chunks').innerHTML = '';
   $('#segText').textContent = '第 0 / 0 段';
   $('#timeText').textContent = '00:00 / 约 00:00';
@@ -503,6 +507,7 @@ function renderDoc() {
   const d = S.doc;
   if (!d) return clearDoc();
   $('#playBtn').disabled = false;
+  $('#download').disabled = false;
   $('#segText').textContent = `第 0 / ${d.total} 段`;
   $('#timeText').textContent = `00:00 / 约 ${fmt(d.estSec)}`;
   $('#barFill').style.width = '0%';
@@ -604,6 +609,53 @@ function legacyCopy(text) {
     document.body.removeChild(ta);
   }
   if (!ok) throw new Error('浏览器拒绝了复制请求');
+}
+
+/* 边收边显示进度，收完再触发下载——比让浏览器干等一个无 Content-Length 的响应更清楚 */
+async function downloadMp3() {
+  if (!S.doc) return;
+  const btn = $('#download');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '生成中…';
+  try {
+    const q = `voice=${encodeURIComponent(S.voice)}&model=${encodeURIComponent(S.model)}`;
+    const res = await fetch(`/api/export/${S.doc.id}?${q}`);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ error: '导出失败' }));
+      throw new Error(e.error);
+    }
+    const est = Number(res.headers.get('X-Est-Bytes') || 0) || S.doc.estSec * 8000;
+    const reader = res.body.getReader();
+    const parts = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+      got += value.length;
+      btn.textContent = `生成中 ${Math.min(99, Math.round((got / est) * 100))}%`;
+    }
+
+    const blob = new Blob(parts, { type: 'audio/mpeg' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (S.doc.name.replace(/\.[^.]+$/, '') || 'audio') + '.mp3';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    btn.textContent = '已下载';
+  } catch (e) {
+    showError(`导出失败：${e.message}`);
+    btn.textContent = label;
+  } finally {
+    setTimeout(() => {
+      btn.textContent = label;
+      btn.disabled = !S.doc;
+    }, 1500);
+  }
 }
 
 async function copyNotes() {
@@ -901,6 +953,7 @@ async function onToggle() {
 $('#playBtn').addEventListener('click', onToggle);
 $('#addNote').addEventListener('click', addNote);
 $('#copyNotes').addEventListener('click', copyNotes);
+$('#download').addEventListener('click', downloadMp3);
 
 $('#drop').addEventListener('click', () => $('#fileInput').click());
 $('#addBtn').addEventListener('click', () => $('#fileInput').click());
