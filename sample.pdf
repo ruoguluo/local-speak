@@ -1,0 +1,117 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1443 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 700 Tm (Small speech models have quietly become the most useful part of the local) Tj
+1 0 0 1 72 684 Tm (stack. A forty million parameter network, quantised to eight bits, occupies) Tj
+1 0 0 1 72 668 Tm (less space than a single photograph, yet it can render a paragraph of text as) Tj
+1 0 0 1 72 652 Tm (natural speech in a fraction of the time a cloud service needs to accept the) Tj
+1 0 0 1 72 636 Tm (request. This is not a marginal improvement. It changes what an application) Tj
+1 0 0 1 72 620 Tm (can assume about latency, privacy, and cost, and it therefore changes which) Tj
+1 0 0 1 72 604 Tm (applications are worth building at all.) Tj
+1 0 0 1 72 572 Tm (Consider the reading machine. Dr. Smith, who runs a clinic in a small town,) Tj
+1 0 0 1 72 556 Tm (does not need a general purpose assistant. She needs a device that reads the) Tj
+1 0 0 1 72 540 Tm (small print on a pill bottle out loud, in the patient's own language, without) Tj
+1 0 0 1 72 524 Tm (sending a photograph of a prescription to a data centre somewhere else. The) Tj
+1 0 0 1 72 508 Tm (constraint is not intelligence. The constraint is that the round trip must) Tj
+1 0 0 1 72 492 Tm (finish before the patient loses patience, e.g. within about a second, and) Tj
+1 0 0 1 72 476 Tm (that no image ever leaves the room.) Tj
+ET
+BT /F1 8 Tf
+1 0 0 1 72 732 Tm (THE QUARTERLY REVIEW OF LOCAL MODELS) Tj
+ET
+BT /F1 9 Tf
+1 0 0 1 302.0 60 Tm (1) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 1487 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 700 Tm (The same argument applies to long form reading. A person who wants to hear a) Tj
+1 0 0 1 72 684 Tm (two hundred page report while walking the dog is not asking for a summary.) Tj
+1 0 0 1 72 668 Tm (They are asking for the whole thing, spoken at a steady pace, with the) Tj
+1 0 0 1 72 652 Tm (paragraph breaks preserved and the footnotes skipped. Doing this well is) Tj
+1 0 0 1 72 636 Tm (mostly a text processing problem. A PDF is a container for positioned glyphs,) Tj
+1 0 0 1 72 620 Tm (not for sentences, so the pipeline must reconstruct the sentences first:) Tj
+1 0 0 1 72 604 Tm (remove the running head, drop the page numbers, undo the hyphenation that) Tj
+1 0 0 1 72 588 Tm (the typesetter inserted to justify a line, then cut the result into chunks) Tj
+1 0 0 1 72 572 Tm (that a speech model can handle without losing the thread of the argument.) Tj
+1 0 0 1 72 540 Tm (There is a second reason to keep the model small. Synthesis at a hundred) Tj
+1 0 0 1 72 524 Tm (times real time means a one hour audiobook renders in under a minute, which) Tj
+1 0 0 1 72 508 Tm (makes batch generation practical on a laptop. A publisher can produce six) Tj
+1 0 0 1 72 492 Tm (voice variants of the same chapter, listen to all of them, and keep the one) Tj
+1 0 0 1 72 476 Tm (that sounds least like a machine reading a telephone directory.) Tj
+ET
+BT /F1 8 Tf
+1 0 0 1 72 732 Tm (THE QUARTERLY REVIEW OF LOCAL MODELS) Tj
+ET
+BT /F1 9 Tf
+1 0 0 1 302.0 60 Tm (2) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 1208 >>
+stream
+BT
+/F1 11 Tf
+1 0 0 1 72 700 Tm (None of this is free of caveats. The licensing matters: the multilingual) Tj
+1 0 0 1 72 684 Tm (weights carry a non commercial restriction, so a paid product must either) Tj
+1 0 0 1 72 668 Tm (use the permissively licensed base model or negotiate a separate agreement.) Tj
+1 0 0 1 72 652 Tm (The language coverage is narrow. Five European languages are supported, and) Tj
+1 0 0 1 72 636 Tm (a document in any other script will produce confident nonsense rather than) Tj
+1 0 0 1 72 620 Tm (an error, which is the worst possible failure mode for a reading aid.) Tj
+1 0 0 1 72 588 Tm (The voice catalog is fixed. There is no cloning, no emotion tag, no way to) Tj
+1 0 0 1 72 572 Tm (make the narrator sound like a particular person. For an audiobook that is) Tj
+1 0 0 1 72 556 Tm (a real limitation; for a notification system it is irrelevant. The lesson is) Tj
+1 0 0 1 72 540 Tm (that a small model should be placed where its constraints do not matter, and) Tj
+1 0 0 1 72 524 Tm (that is usually in the middle of a pipeline rather than at the end of one.) Tj
+ET
+BT /F1 8 Tf
+1 0 0 1 72 732 Tm (THE QUARTERLY REVIEW OF LOCAL MODELS) Tj
+ET
+BT /F1 9 Tf
+1 0 0 1 302.0 60 Tm (3) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000001748 00000 n 
+0000001874 00000 n 
+0000003413 00000 n 
+0000003539 00000 n 
+0000004799 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+4896
+%%EOF

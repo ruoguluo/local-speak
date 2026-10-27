@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地朗读</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<meta name="theme-color" content="#185FA5">
+<style>
+  :root {
+    --bg: #FBFAF7;
+    --card: #FFFFFF;
+    --line: #E4E1D9;
+    --line-soft: #EFEDE6;
+    --ink: #2C2C2A;
+    --ink-2: #5F5E5A;
+    --ink-3: #888780;
+    --accent: #185FA5;
+    --accent-soft: #E6F1FB;
+    --danger: #A32D2D;
+    --danger-soft: #FCEBEB;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px 64px;
+    background: var(--bg); color: var(--ink);
+    font: 400 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 24px; }
+
+  .layout {
+    display: grid; grid-template-columns: 236px minmax(0, 1fr);
+    gap: 16px; align-items: start;
+  }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .side {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px; position: sticky; top: 24px;
+  }
+  @media (max-width: 820px) {
+    .side { position: static; }
+  }
+  .side-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .head-actions { display: flex; align-items: center; gap: 14px; }
+  .playlist { display: flex; flex-direction: column; gap: 2px; max-height: 62vh; overflow-y: auto; }
+  .pl-empty { font-size: 12px; color: var(--ink-3); line-height: 1.6; padding: 6px 4px; }
+  .pl-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 8px; border-radius: 8px; cursor: pointer;
+  }
+  .pl-item:hover { background: var(--line-soft); }
+  .pl-item.active { background: var(--accent-soft); }
+  .pl-item.done .pl-name { color: var(--ink-3); }
+  .pl-idx {
+    flex: 0 0 auto; width: 13px; text-align: right;
+    font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+  }
+  .pl-body { flex: 1; min-width: 0; }
+  .pl-name {
+    font-size: 13px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pl-item.active .pl-name { color: var(--accent); }
+  .pl-meta { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .pl-del {
+    flex: 0 0 auto; border: 0; background: none; color: var(--ink-3);
+    cursor: pointer; font-size: 15px; line-height: 1; padding: 3px 5px;
+    border-radius: 4px; opacity: 0;
+  }
+  .pl-item:hover .pl-del { opacity: 1; }
+  .pl-del:hover { color: var(--danger); background: var(--danger-soft); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px; margin-bottom: 12px;
+  }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .label { font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
+
+  .drop {
+    border: 1px dashed var(--line); border-radius: 10px;
+    padding: 22px 18px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop.busy { opacity: .55; pointer-events: none; }
+  .drop strong { font-weight: 500; display: block; margin-bottom: 4px; }
+  .drop span { font-size: 13px; color: var(--ink-3); }
+
+  .link {
+    font-size: 13px; color: var(--accent); cursor: pointer;
+    background: none; border: 0; padding: 0; font-family: inherit;
+  }
+  .link:hover { text-decoration: underline; }
+
+  .row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .field { flex: 1 1 180px; min-width: 150px; }
+
+  .dd { position: relative; margin-top: 6px; }
+  .dd-btn {
+    width: 100%; display: flex; align-items: center; gap: 8px;
+    padding: 9px 10px; font: inherit; font-size: 14px; color: var(--ink);
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; cursor: pointer; text-align: left;
+  }
+  .dd-btn:hover { border-color: var(--ink-3); }
+  .dd-btn[aria-expanded="true"] { border-color: var(--accent); outline: 2px solid var(--accent-soft); }
+  .dd-value { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-chev { flex: 0 0 auto; color: var(--ink-3); transition: transform .15s; }
+  .dd-btn[aria-expanded="true"] .dd-chev { transform: rotate(180deg); }
+  .dd-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+    max-height: 260px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 4px;
+    box-shadow: 0 8px 28px rgba(44, 44, 42, .12);
+  }
+  .dd-menu[hidden] { display: none; }
+  .dd.up .dd-menu { top: auto; bottom: calc(100% + 4px); }
+  .dd-item {
+    padding: 8px 10px; font-size: 14px; color: var(--ink-2);
+    border-radius: 6px; cursor: pointer; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .dd-item:hover { background: var(--line-soft); color: var(--ink); }
+  .dd-item.sel { color: var(--accent); font-weight: 500; background: var(--accent-soft); }
+
+  .player { display: flex; align-items: center; gap: 16px; }
+  .play-btn {
+    flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%;
+    border: 0; background: var(--accent); color: #fff; cursor: pointer;
+    display: grid; place-items: center; transition: transform .1s, opacity .15s;
+  }
+  .play-btn:hover:not(:disabled) { transform: scale(1.04); }
+  .play-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .play-btn svg { width: 20px; height: 20px; fill: currentColor; }
+  .track-area { flex: 1; min-width: 0; }
+  .bar {
+    height: 6px; background: var(--line-soft); border-radius: 3px;
+    overflow: hidden; margin-bottom: 8px;
+  }
+  .bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .1s linear; }
+  .times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  details { margin-top: 4px; }
+  summary {
+    font-size: 13px; color: var(--ink-2); cursor: pointer;
+    padding: 6px 0; list-style: none; user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸ "; color: var(--ink-3); }
+  details[open] summary::before { content: "▾ "; }
+  .chunks { margin-top: 8px; max-height: 300px; overflow-y: auto; }
+  .chunk {
+    font-size: 13px; line-height: 1.55; color: var(--ink-2);
+    padding: 7px 10px; border-radius: 6px; border-left: 2px solid transparent;
+    cursor: pointer; transition: background .12s, color .12s;
+  }
+  .chunk:hover { background: var(--line-soft); color: var(--ink); }
+  .chunk .n { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .chunk.para::after { content: " ¶"; color: var(--accent); }
+  .chunk.active { background: var(--accent-soft); border-left-color: var(--accent); color: var(--ink); }
+
+  .notes { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+  .note { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 6px; }
+  .note:hover { background: var(--line-soft); }
+  .note-time {
+    flex: 0 0 auto; border: 0; background: none; padding: 3px 5px; border-radius: 4px;
+    font: inherit; font-size: 12px; color: var(--accent); cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  .note-time:hover { background: var(--accent-soft); }
+  .note-text {
+    flex: 1; min-width: 0; border: 0; background: none; padding: 5px 2px;
+    font: inherit; font-size: 13px; color: var(--ink); outline: none;
+  }
+  .note-text::placeholder { color: var(--ink-3); }
+  .note-del {
+    flex: 0 0 auto; border: 0; background: none; color: var(--ink-3);
+    cursor: pointer; font-size: 15px; line-height: 1; padding: 3px 5px;
+    border-radius: 4px; opacity: 0;
+  }
+  .note:hover .note-del { opacity: 1; }
+  .note-del:hover { color: var(--danger); background: var(--danger-soft); }
+  .note-empty { font-size: 12px; color: var(--ink-3); padding: 4px 6px; }
+
+  .alert {
+    display: none; padding: 11px 14px; border-radius: 8px; font-size: 13px;
+    background: var(--danger-soft); color: var(--danger); margin-bottom: 12px;
+    border: 1px solid #F7C1C1;
+  }
+  .alert.show { display: block; }
+  .hint { font-size: 12px; color: var(--ink-3); margin-top: 10px; }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>本地朗读</h1>
+  <p class="sub">PDF / TXT / Markdown → 本地 Phonon 合成 → 浏览器播放。全程不出这台机器。</p>
+
+  <div class="alert" id="alert"></div>
+
+  <div class="layout">
+    <aside class="side">
+      <div class="side-head">
+        <span class="label">播放列表</span>
+        <button class="link" id="addBtn">＋ 添加</button>
+      </div>
+      <div class="playlist" id="playlist"></div>
+    </aside>
+
+    <main>
+      <div class="card">
+        <div class="drop" id="drop">
+          <strong>添加文件或拖进来</strong>
+          <span>可多选 · .pdf · .txt · .md</span>
+        </div>
+        <input type="file" id="fileInput" accept=".pdf,.txt,.text,.md,.markdown" multiple hidden>
+      </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <span class="label">音色</span>
+        <div class="dd" id="voiceDD">
+          <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span class="dd-value">加载中…</span>
+            <svg class="dd-chev" viewBox="0 0 12 12" width="12" height="12"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="dd-menu" role="listbox" hidden></div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">模型</span>
+        <div class="dd" id="modelDD">
+          <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span class="dd-value">phonon</span>
+            <svg class="dd-chev" viewBox="0 0 12 12" width="12" height="12"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="dd-menu" role="listbox" hidden></div>
+        </div>
+      </div>
+      <button class="link" id="preview" style="padding-bottom:11px">试听</button>
+    </div>
+    <p class="hint" id="voiceHint">音色库里还有几个角色音色，读故事时挺有意思。</p>
+  </div>
+
+  <div class="card">
+    <div class="player">
+      <button class="play-btn" id="playBtn" disabled aria-label="播放">
+        <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <div class="track-area">
+        <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+        <div class="times">
+          <span id="timeText">00:00 / 约 00:00</span>
+          <span id="segText">第 0 / 0 段</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="label">笔记 <span id="noteCount"></span></span>
+          <span class="head-actions">
+            <button class="link" id="copyNotes" disabled>复制</button>
+            <button class="link" id="addNote" disabled>＋ 记笔记</button>
+          </span>
+        </div>
+        <div class="notes" id="notes"></div>
+      </div>
+
+      <div class="card">
+        <details>
+          <summary>查看分段文本（点击任意段落，从那里开始播放）</summary>
+          <div class="chunks" id="chunks"></div>
+        </details>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const AHEAD = 1.2;   // 提前调度多少秒音频
+const PREFETCH = 3;  // 提前抓几块
+
+const S = {
+  doc: null, voice: 'default', model: 'phonon',
+  ctx: null, idx: 0, nextStart: 0, prefetch: new Map(),
+  running: false, gen: 0, raf: 0, done: false, activeChunk: -1,
+  sources: [],            // 已调度的音源，跳转时要逐个停掉
+  durations: {},          // 各块真实时长，用来估算跳转位置
+  offset: 0,              // 本次播放起点在整篇音频中的时间偏移
+  t0: 0,                  // 重置 offset 时的 ctx.currentTime
+  queue: [],              // 播放列表
+  cur: -1,                // 当前项下标
+  timeline: [],           // 已调度音频的时间区间，用来算"此刻在播哪一块"
+  notes: [],              // 当前文档的笔记
+};
+
+function fmt(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+}
+
+function b64utf8(s) {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+}
+
+function showError(msg) {
+  const el = $('#alert');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showError.t);
+  showError.t = setTimeout(() => el.classList.remove('show'), 8000);
+}
+
+function setIcon(kind) {
+  const p = $('#playIcon');
+  if (kind === 'pause') p.innerHTML = '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>';
+  else if (kind === 'loading') p.innerHTML = '<path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z" opacity=".4"/>';
+  else p.innerHTML = '<path d="M8 5v14l11-7z"/>';
+}
+
+/* ---------- 播放列表 ---------- */
+
+async function uploadFile(file) {
+  const res = await fetch('/api/open', {
+    method: 'POST',
+    headers: { 'X-Filename': b64utf8(file.name) },
+    body: await file.arrayBuffer(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '解析失败');
+  return { ...data, done: false };
+}
+
+async function addFiles(fileList) {
+  const files = [...fileList];
+  if (!files.length) return;
+  const drop = $('#drop');
+  drop.classList.add('busy');
+  const original = drop.innerHTML;
+
+  for (let n = 0; n < files.length; n++) {
+    drop.innerHTML = `<strong><span class="spin">◐</span> 解析 ${n + 1}/${files.length}…</strong>`;
+    try {
+      const item = await uploadFile(files[n]);
+      S.queue.push(item);
+      if (S.cur === -1) S.cur = 0;
+    } catch (e) {
+      showError(`${files[n].name}：${e.message}`);
+    }
+  }
+
+  drop.classList.remove('busy');
+  drop.innerHTML = original;
+  if (S.cur >= 0 && !S.doc) {
+    S.doc = S.queue[S.cur];
+    renderDoc();
+  }
+  renderPlaylist();
+}
+
+function renderPlaylist() {
+  const box = $('#playlist');
+  box.innerHTML = '';
+  if (!S.queue.length) {
+    const empty = document.createElement('div');
+    empty.className = 'pl-empty';
+    empty.textContent = '还没有文件。点「＋ 添加」，或把文件拖到右边。';
+    box.append(empty);
+    return;
+  }
+
+  S.queue.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'pl-item' + (i === S.cur ? ' active' : '') + (item.done ? ' done' : '');
+    row.title = item.name;
+
+    const idx = document.createElement('span');
+    idx.className = 'pl-idx';
+    idx.textContent = item.done ? '✓' : String(i + 1);
+
+    const body = document.createElement('div');
+    body.className = 'pl-body';
+    const name = document.createElement('div');
+    name.className = 'pl-name';
+    name.textContent = item.name;
+    const meta = document.createElement('div');
+    meta.className = 'pl-meta';
+    meta.textContent = `${item.total} 段 · ${fmt(item.estSec)}`;
+    body.append(name, meta);
+
+    const del = document.createElement('button');
+    del.className = 'pl-del';
+    del.textContent = '×';
+    del.title = '移出列表';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeItem(i);
+    });
+
+    row.append(idx, body, del);
+    row.addEventListener('click', () => selectItem(i, { autoplay: true }));
+    box.append(row);
+  });
+}
+
+function clearDoc() {
+  $('#playBtn').disabled = true;
+  $('#chunks').innerHTML = '';
+  $('#segText').textContent = '第 0 / 0 段';
+  $('#timeText').textContent = '00:00 / 约 00:00';
+  $('#barFill').style.width = '0%';
+  const det = document.querySelector('details');
+  if (det) det.open = false;
+  S.notes = [];
+  renderNotes();
+}
+
+async function selectItem(i, { autoplay = false } = {}) {
+  if (i < 0 || i >= S.queue.length) return;
+  const reuseCtx = autoplay && !!S.ctx;   // 自动续播复用 ctx，否则会被自动播放策略拦住
+  resetPlayer({ keepCtx: reuseCtx });
+  S.cur = i;
+  S.doc = S.queue[i];
+  renderDoc();
+  renderPlaylist();
+  if (autoplay) await startPlayback(0, { reuseCtx });
+}
+
+function removeItem(i) {
+  const wasCurrent = i === S.cur;
+  S.queue.splice(i, 1);
+
+  if (i < S.cur) {
+    S.cur--;                       // 删的是前面的项，当前项下标前移
+  } else if (wasCurrent) {
+    resetPlayer();
+    S.doc = null;
+    if (S.queue.length) {
+      S.cur = Math.min(i, S.queue.length - 1);
+      S.doc = S.queue[S.cur];
+      renderDoc();
+    } else {
+      S.cur = -1;
+      clearDoc();
+    }
+  }
+  renderPlaylist();
+}
+
+function onDocEnd() {
+  if (S.cur >= 0 && S.queue[S.cur]) S.queue[S.cur].done = true;
+  renderPlaylist();
+  if (S.cur + 1 < S.queue.length) {
+    selectItem(S.cur + 1, { autoplay: true });
+  } else {
+    setIcon('play');
+    paintProgress();
+  }
+}
+
+/* pump 结束只代表"所有块都排进队列了"，此时音频可能还在播。
+   ctx.currentTime 在暂停时会冻结，所以这个循环天然也会等用户恢复。 */
+async function waitThenAdvance(gen) {
+  while (gen === S.gen && S.ctx && S.ctx.currentTime < S.nextStart - 0.02) {
+    await sleep(80);
+  }
+  if (gen !== S.gen || !S.ctx) return;   // 期间被停止或跳转打断
+  onDocEnd();
+}
+
+function renderDoc() {
+  const d = S.doc;
+  if (!d) return clearDoc();
+  $('#playBtn').disabled = false;
+  $('#segText').textContent = `第 0 / ${d.total} 段`;
+  $('#timeText').textContent = `00:00 / 约 ${fmt(d.estSec)}`;
+  $('#barFill').style.width = '0%';
+  loadNotes();
+  renderNotes();
+
+  const box = $('#chunks');
+  box.innerHTML = '';
+  d.chunks.forEach((c) => {
+    const el = document.createElement('div');
+    el.className = 'chunk' + (c.paraEnd ? ' para' : '');
+    el.dataset.i = c.i;
+    el.title = '点击从这一段开始播放';
+    el.addEventListener('click', () => seekTo(c.i));
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = String(c.i + 1).padStart(2, '0');
+    el.append(n, document.createTextNode(c.text));
+    box.append(el);
+  });
+}
+
+/* ---------- 笔记 ---------- */
+
+const NOTES_PREFIX = 'speak.notes.';
+
+/* 文档 id 每次上传都会变，所以用内容指纹做 key，重新拖同一个文件笔记还在 */
+function noteKey(d) {
+  return `${d.name}|${d.chars}|${d.total}`;
+}
+
+function loadNotes() {
+  S.notes = [];
+  if (!S.doc) return;
+  try {
+    const raw = localStorage.getItem(NOTES_PREFIX + noteKey(S.doc));
+    if (raw) S.notes = JSON.parse(raw);
+  } catch (_) {
+    S.notes = [];
+  }
+}
+
+let notesTimer = 0;
+function saveNotes() {
+  if (!S.doc) return;
+  const doc = S.doc;
+  clearTimeout(notesTimer);
+  notesTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(NOTES_PREFIX + noteKey(doc), JSON.stringify(S.notes));
+    } catch (_) {}
+  }, 200);
+}
+
+function elapsedNow() {
+  if (!S.ctx) return 0;
+  return S.offset + (S.ctx.currentTime - S.t0);
+}
+
+/* 正在出声的那一块（不是"下一块要调度的"） */
+function currentChunk() {
+  if (!S.ctx || !S.timeline.length) return Math.max(0, S.idx - 1);
+  const t = S.ctx.currentTime;
+  for (let k = S.timeline.length - 1; k >= 0; k--) {
+    if (t >= S.timeline[k].start) return S.timeline[k].i;
+  }
+  return Math.max(0, S.idx - 1);
+}
+
+function addNote() {
+  if (!S.doc) return;
+  const note = { i: currentChunk(), t: elapsedNow(), text: '' };
+  S.notes.push(note);
+  S.notes.sort((a, b) => a.t - b.t);
+  renderNotes({ focus: note });
+  saveNotes();
+}
+
+function formatNotes() {
+  const rows = S.notes.filter((n) => n.text.trim());
+  if (!rows.length) return '';
+  const head = `${S.doc.name} · ${rows.length} 条笔记`;
+  return [head, ...rows.map((n) => `${fmt(n.t)}  ${n.text.trim()}`)].join('\n');
+}
+
+/* http://192.168.x.x 不是安全上下文，navigator.clipboard 根本不存在，必须留降级路径 */
+function legacyCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } finally {
+    document.body.removeChild(ta);
+  }
+  if (!ok) throw new Error('浏览器拒绝了复制请求');
+}
+
+async function copyNotes() {
+  const text = formatNotes();
+  if (!text) return showError('还没有可复制的笔记内容。');
+  const btn = $('#copyNotes');
+  try {
+    if (window.isSecureContext && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (_) {
+        legacyCopy(text);   // 权限被拒时也降级，别让用户卡住
+      }
+    } else {
+      legacyCopy(text);
+    }
+    const label = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(() => { btn.textContent = label; }, 1500);
+  } catch (e) {
+    showError(`复制失败：${e.message}`);
+  }
+}
+
+function renderNotes(opts = {}) {
+  const box = $('#notes');
+  box.innerHTML = '';
+  $('#noteCount').textContent = S.notes.length ? `(${S.notes.length})` : '';
+  $('#addNote').disabled = !S.doc;
+  $('#copyNotes').disabled = !S.doc || !S.notes.some((n) => n.text.trim());
+
+  if (!S.notes.length) {
+    const empty = document.createElement('div');
+    empty.className = 'note-empty';
+    empty.textContent = S.doc
+      ? '还没有笔记。播放时点「＋ 记笔记」，会记下当前进度。'
+      : '先添加一个文件。';
+    box.append(empty);
+    return;
+  }
+
+  S.notes.forEach((note) => {
+    const row = document.createElement('div');
+    row.className = 'note';
+
+    const time = document.createElement('button');
+    time.className = 'note-time';
+    time.textContent = fmt(note.t);
+    time.title = '跳到这个位置';
+    time.addEventListener('click', () => seekTo(note.i));
+
+    const input = document.createElement('input');
+    input.className = 'note-text';
+    input.type = 'text';
+    input.value = note.text;
+    input.placeholder = '写点什么…';
+    input.addEventListener('input', () => {
+      note.text = input.value;
+      $('#copyNotes').disabled = !S.notes.some((n) => n.text.trim());
+      saveNotes();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') input.blur();
+    });
+
+    const del = document.createElement('button');
+    del.className = 'note-del';
+    del.textContent = '×';
+    del.title = '删除这条笔记';
+    del.addEventListener('click', () => {
+      S.notes = S.notes.filter((n) => n !== note);
+      renderNotes();
+      saveNotes();
+    });
+
+    row.append(time, input, del);
+    box.append(row);
+    if (opts.focus === note) setTimeout(() => input.focus(), 0);
+  });
+}
+
+/* ---------- 播放 ---------- */
+
+async function loadChunk(i, gen) {
+  const q = `voice=${encodeURIComponent(S.voice)}&model=${encodeURIComponent(S.model)}`;
+  const res = await fetch(`/api/audio/${S.doc.id}/${i}?${q}`);
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ error: '音频加载失败' }));
+    throw new Error(e.error);
+  }
+  if (gen !== S.gen) throw new Error('cancelled');
+  return await S.ctx.decodeAudioData(await res.arrayBuffer());
+}
+
+function prefetchAhead(gen) {
+  const end = Math.min(S.idx + PREFETCH, S.doc.total);
+  for (let k = S.idx; k < end; k++) {
+    if (!S.prefetch.has(k)) S.prefetch.set(k, loadChunk(k, gen));
+  }
+}
+
+async function pump(gen) {
+  while (S.running && gen === S.gen) {
+    if (S.idx >= S.doc.total) {
+      S.done = true;
+      S.running = false;
+      waitThenAdvance(gen);   // 等音频真正播完，不能只看"调度完"
+      return;
+    }
+    if (S.nextStart > S.ctx.currentTime + AHEAD) {
+      await sleep(60);
+      continue;
+    }
+    prefetchAhead(gen);
+    const pending = S.prefetch.get(S.idx);
+    if (!pending) { await sleep(20); continue; }
+
+    let buf;
+    try {
+      buf = await pending;
+    } catch (e) {
+      if (gen !== S.gen || e.message === 'cancelled') return;
+      showError(`第 ${S.idx + 1} 段合成失败：${e.message}`);
+      S.prefetch.delete(S.idx);
+      S.idx++;
+      continue;
+    }
+    if (gen !== S.gen) return;
+
+    S.prefetch.delete(S.idx);
+    const src = S.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(S.ctx.destination);
+    const at = Math.max(S.nextStart, S.ctx.currentTime + 0.04);
+    src.start(at);
+    S.durations[S.idx] = buf.duration;
+    S.sources.push(src);
+    S.timeline.push({ start: at, end: at + buf.duration, i: S.idx });
+    src.onended = () => {
+      S.sources = S.sources.filter((x) => x !== src);
+    };
+    S.nextStart = at + buf.duration;
+    S.idx++;
+  }
+}
+
+/* 还没合成过的块用字数估时长，够用来摆进度条 */
+function estimateStart(i) {
+  let t = 0;
+  for (let k = 0; k < i; k++) {
+    t += S.durations[k] ?? (S.doc.chunks[k].text.length / 15 + 0.3);
+  }
+  return t;
+}
+
+function paintActive(i) {
+  document.querySelectorAll('.chunk.active').forEach((el) => el.classList.remove('active'));
+  const el = document.querySelector(`.chunk[data-i="${i}"]`);
+  if (el) {
+    el.classList.add('active');
+    el.scrollIntoView({ block: 'nearest' });
+  }
+  S.activeChunk = i;
+}
+
+function paintProgress() {
+  if (!S.ctx || !S.doc) return;
+  const elapsed = S.offset + (S.ctx.currentTime - S.t0);
+  const denom = Math.max(S.doc.estSec, S.offset + S.nextStart, 1);
+  $('#barFill').style.width = Math.min(100, (elapsed / denom) * 100) + '%';
+  $('#timeText').textContent = `${fmt(elapsed)} / 约 ${fmt(denom)}`;
+  $('#segText').textContent = `第 ${Math.min(S.idx, S.doc.total)} / ${S.doc.total} 段`;
+}
+
+function tick() {
+  if (!S.ctx) return;
+  paintProgress();
+
+  const cur = Math.min(S.idx - 1, S.doc.total - 1);
+  if (cur !== S.activeChunk) paintActive(cur);
+  S.raf = requestAnimationFrame(tick);
+}
+
+async function startPlayback(from = 0, { reuseCtx = false } = {}) {
+  // 自动续播时必须复用已有的 AudioContext，新建的会被自动播放策略挂起
+  if (S.ctx && !reuseCtx) { S.ctx.close().catch(() => {}); S.ctx = null; }
+  if (!S.ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    S.ctx = new AC();
+  }
+  if (S.ctx.state === 'suspended') {
+    try { await S.ctx.resume(); } catch (_) {}
+  }
+  S.sources = [];
+  S.timeline = [];
+  S.idx = from;
+  S.nextStart = 0;
+  S.prefetch.clear();
+  S.running = true;
+  S.done = false;
+  S.activeChunk = -1;
+  S.offset = estimateStart(from);
+  S.t0 = S.ctx.currentTime;
+  const gen = ++S.gen;
+  setIcon('pause');
+  cancelAnimationFrame(S.raf);
+  tick();
+  pump(gen);
+}
+
+/* 跳转到第 i 段：先掐掉已排队的音源，再重置调度基准 */
+function seekTo(i) {
+  if (!S.doc) return;
+  i = Math.max(0, Math.min(i, S.doc.total - 1));
+  const playing = S.ctx && S.ctx.state === 'running';
+
+  S.sources.forEach((s) => { try { s.stop(); } catch (_) {} });
+  S.sources = [];
+  S.timeline = [];
+  S.gen++;                 // 让旧的 pump 循环退出
+  S.prefetch.clear();
+  S.running = false;
+  S.done = false;
+
+  if (!S.ctx) {            // 还没开始播，就从这一段开始
+    startPlayback(i);
+    return;
+  }
+
+  S.idx = i;
+  S.nextStart = 0;
+  S.offset = estimateStart(i);
+  S.t0 = S.ctx.currentTime;
+  paintActive(i);
+  paintProgress();
+
+  if (playing) {
+    const gen = ++S.gen;
+    S.running = true;
+    pump(gen);
+  } else {
+    setIcon('play');       // 保持暂停，下次播放从新位置开始
+  }
+}
+
+function resetPlayer({ keepCtx = false } = {}) {
+  S.running = false;
+  S.gen++;
+  S.sources.forEach((s) => { try { s.stop(); } catch (_) {} });
+  S.sources = [];
+  S.timeline = [];
+  if (S.ctx && !keepCtx) {
+    S.ctx.close().catch(() => {});
+    S.ctx = null;
+  }
+  cancelAnimationFrame(S.raf);
+  S.idx = 0;
+  S.nextStart = 0;
+  S.prefetch.clear();
+  S.done = false;
+  S.activeChunk = -1;
+  S.offset = 0;
+  S.t0 = 0;
+  setIcon('play');
+  $('#barFill').style.width = '0%';
+  document.querySelectorAll('.chunk.active').forEach((el) => el.classList.remove('active'));
+  if (S.doc) {
+    $('#timeText').textContent = `00:00 / 约 ${fmt(S.doc.estSec)}`;
+    $('#segText').textContent = `第 0 / ${S.doc.total} 段`;
+  }
+}
+
+async function onToggle() {
+  if (!S.doc) return;
+  if (!S.ctx || S.done) {
+    await startPlayback(S.done ? 0 : S.idx);
+    return;
+  }
+  if (S.ctx.state === 'running') {
+    await S.ctx.suspend();   // 时钟冻结，恢复时精确接上
+    setIcon('play');
+  } else {
+    await S.ctx.resume();
+    setIcon('pause');
+    if (!S.running) {        // 暂停期间跳转过，得重新起泵
+      const gen = ++S.gen;
+      S.running = true;
+      pump(gen);
+    }
+  }
+}
+
+/* ---------- 事件 ---------- */
+
+$('#playBtn').addEventListener('click', onToggle);
+$('#addNote').addEventListener('click', addNote);
+$('#copyNotes').addEventListener('click', copyNotes);
+
+$('#drop').addEventListener('click', () => $('#fileInput').click());
+$('#addBtn').addEventListener('click', () => $('#fileInput').click());
+$('#fileInput').addEventListener('change', (e) => {
+  addFiles(e.target.files);
+  e.target.value = '';
+});
+
+['dragenter', 'dragover'].forEach((ev) =>
+  $('#drop').addEventListener(ev, (e) => { e.preventDefault(); $('#drop').classList.add('over'); })
+);
+['dragleave', 'drop'].forEach((ev) =>
+  $('#drop').addEventListener(ev, (e) => { e.preventDefault(); $('#drop').classList.remove('over'); })
+);
+$('#drop').addEventListener('drop', (e) => {
+  addFiles(e.dataTransfer.files);
+});
+
+/* 自绘下拉：不依赖原生 select 弹层，WebView 里也能正常用 */
+function makeDropdown(rootId, onPick) {
+  const root = document.getElementById(rootId);
+  const btn = root.querySelector('.dd-btn');
+  const valueEl = root.querySelector('.dd-value');
+  const menu = root.querySelector('.dd-menu');
+  let options = [];
+  let current = '';
+
+  function render() {
+    menu.innerHTML = '';
+    options.forEach((opt) => {
+      const item = document.createElement('div');
+      item.className = 'dd-item' + (opt === current ? ' sel' : '');
+      item.textContent = opt;
+      item.setAttribute('role', 'option');
+      item.addEventListener('click', () => pick(opt));
+      menu.appendChild(item);
+    });
+  }
+
+  function setOpen(open) {
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      render();
+      // 下方空间不够就向上翻，别让菜单跑出视口
+      const rect = btn.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom;
+      root.classList.toggle('up', below < 280 && rect.top > below);
+      const sel = menu.querySelector('.sel');
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function pick(opt) {
+    current = opt;
+    valueEl.textContent = opt;
+    setOpen(false);
+    onPick(opt);
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  document.addEventListener('click', () => { if (!menu.hidden) setOpen(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) setOpen(false); });
+
+  return {
+    setOptions(list, selected) {
+      options = list;
+      current = selected;
+      valueEl.textContent = selected;
+      render();
+    },
+  };
+}
+
+const voiceDD = makeDropdown('voiceDD', (v) => {
+  S.voice = v;
+  if (S.ctx) { resetPlayer(); showError('已切换音色，请重新播放。'); }
+});
+
+const modelDD = makeDropdown('modelDD', (m) => {
+  S.model = m;
+  if (S.ctx) { resetPlayer(); showError('已切换模型，请重新播放。'); }
+});
+
+$('#preview').addEventListener('click', async () => {
+  const btn = $('#preview');
+  btn.textContent = '合成中…';
+  try {
+    const q = `voice=${encodeURIComponent(S.voice)}&model=${encodeURIComponent(S.model)}`;
+    const res = await fetch(`/api/preview?${q}`);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ error: '试听失败' }));
+      throw new Error(e.error);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const audio = new Audio(url);
+    audio.onended = () => URL.revokeObjectURL(url);
+    await audio.play();
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    btn.textContent = '试听';
+  }
+});
+
+/* ---------- 初始化 ---------- */
+
+(async () => {
+  try {
+    const res = await fetch('/api/voices');
+    const { voices, models } = await res.json();
+
+    const startVoice = voices.includes('Zoey') ? 'Zoey' : voices[0];
+    S.voice = startVoice;
+    voiceDD.setOptions(voices, startVoice);
+
+    const extras = voices.filter((v) => /Grub|Snow Queen|Ogre|Godmother/i.test(v));
+    $('#voiceHint').textContent =
+      `${voices.length} 个音色` +
+      (extras.length ? `，其中有 ${extras.slice(0, 2).join('、')} 这类角色音色，读故事时挺有意思` : '') +
+      '。';
+
+    S.model = models[0];
+    modelDD.setOptions(models, models[0]);
+  } catch (e) {
+    showError('连不上后端，确认 speak_server.py 还在运行。');
+  }
+  renderPlaylist();
+  renderNotes();
+})();
+</script>
+</body>
+</html>

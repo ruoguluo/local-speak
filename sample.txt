@@ -1,0 +1,31 @@
+Local Speech, Read Aloud
+========================
+
+A note on what this file is for.
+
+This sample exists so you can hear the pipeline without hunting for a document
+of your own. It is plain text, so there is no layout to reconstruct, but it
+still exercises the two things that break naive readers: hard line wrapping,
+and the hy-
+phenation that editors insert to justify a margin. The split word above should
+come out as one word, while a compound like well-known should stay exactly as
+it is, because its hyphen sits inside a line rather than at the end of one.
+
+Every paragraph here is separated by a blank line, and the reader turns that
+into a longer pause. If you listen closely you can hear the difference between
+the end of a sentence and the end of a paragraph. That difference is most of
+what makes a synthetic voice tolerable over twenty minutes instead of twenty
+seconds.
+
+Three things worth knowing before you press play:
+
+- Phonon speaks English, French, German, Spanish, and Portuguese, and nothing else.
+- The model is small enough to sit in memory beside everything else you run.
+- Synthesis runs far faster than playback, so the audio is usually ready before you are.
+
+One more paragraph, so the file ends on a complete thought rather than a list.
+Reading long text out loud is an old idea that became unfashionable when
+screens arrived. The interesting part is not that a machine can pronounce the
+words. It is that the delay between wanting to hear something and hearing it
+has collapsed to almost nothing, which changes when and where you are willing
+to read at all.
