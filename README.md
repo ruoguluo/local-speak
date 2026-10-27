@@ -37,11 +37,14 @@ python pdf_speak.py book.pdf --dry-run        # 只看断句结果，不发声
 
 - 语音功能目前**只支持 Apple Silicon 的 macOS**（Ollama 的语音能力尚未覆盖 Windows / Linux）
 
-安装 Python 依赖：
+安装 Python 依赖（推荐用项目内虚拟环境，启动脚本会自动优先使用它）：
 
 ```bash
-python3 -m pip install -r requirements.txt
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
 ```
+
+如果不想用 venv，也可以装到全局，但启动脚本会按 `$PYTHON` → `./.venv/bin/python` → PATH 里的 `python3` 的顺序，挑第一个真正装了依赖的解释器。
 
 ## 使用
 

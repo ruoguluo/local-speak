@@ -7,27 +7,27 @@ cd "$(dirname "$0")" || exit 1
 PORT=8765
 URL="http://127.0.0.1:$PORT"
 
-# 找一个可用的 Python 3：优先 $PYTHON，其次从 PATH 里挑
-PY="${PYTHON:-}"
-if [ -z "$PY" ]; then
-  for cand in python3 python3.13 python3.12 python; do
-    if command -v "$cand" >/dev/null 2>&1; then
-      PY="$cand"
-      break
+# 挑一个真正装了依赖的 Python：$PYTHON > 项目内 .venv > PATH 里的 python3
+pick_python() {
+  local cands=()
+  [ -n "$PYTHON" ] && cands+=("$PYTHON")
+  [ -x "./.venv/bin/python" ] && cands+=("./.venv/bin/python")
+  cands+=(python3 python3.13 python3.12 python)
+  for c in $cands; do
+    command -v "$c" >/dev/null 2>&1 || continue
+    if "$c" -c "import numpy, requests, sounddevice, pypdf" >/dev/null 2>&1; then
+      echo "$c"
+      return 0
     fi
   done
-fi
+  return 1
+}
 
+PY="$(pick_python)"
 if [ -z "$PY" ]; then
-  echo "没找到 Python 3，先安装：https://www.python.org/downloads/"
-  echo "按任意键关闭。"
-  read -r -k 1
-  exit 1
-fi
-
-if ! "$PY" -c "import numpy, requests, sounddevice, pypdf" >/dev/null 2>&1; then
-  echo "缺少依赖，先运行："
-  echo "  $PY -m pip install -r requirements.txt"
+  echo "没找到装好依赖的 Python。请在项目目录执行："
+  echo "  python3 -m venv .venv"
+  echo "  ./.venv/bin/pip install -r requirements.txt"
   echo "按任意键关闭。"
   read -r -k 1
   exit 1

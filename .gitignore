@@ -1,5 +1,6 @@
 __pycache__/
 *.py[cod]
 .workbuddy-ai/
+.venv/
 .DS_Store
 *.wav
