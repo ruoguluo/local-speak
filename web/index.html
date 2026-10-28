@@ -339,6 +339,7 @@ const S = {
   doc: null, voice: 'default', model: 'phonon',
   ctx: null, idx: 0, nextStart: 0, prefetch: new Map(),
   running: false, gen: 0, raf: 0, done: false, activeChunk: -1,
+  ended: false,           // 真正播完了；done 只代表"所有块都排进队列了"，两者不是一回事
   sources: [],            // 已调度的音源，跳转时要逐个停掉
   durations: {},          // 各块真实时长，用来估算跳转位置
   offset: 0,              // 本次播放起点在整篇音频中的时间偏移
@@ -513,6 +514,8 @@ function removeItem(i) {
 }
 
 function onDocEnd() {
+  if (S.ended) return;          // 幂等：waitThenAdvance 和 tick 兜底可能都会调到这里
+  S.ended = true;
   if (S.cur >= 0 && S.queue[S.cur]) S.queue[S.cur].done = true;
   renderPlaylist();
   if (S.cur + 1 < S.queue.length) {
@@ -890,6 +893,13 @@ function tick() {
 
   const cur = Math.min(S.idx - 1, S.doc.total - 1);
   if (cur !== S.activeChunk) paintActive(cur);
+
+  // 兜底：调度早已完成、音频也确实播到了末尾，但收尾没跑到（waitThenAdvance 可能
+  // 因为别的原因提前退出）。在这里补一次，保证按钮不会停在"暂停"。
+  if (S.done && !S.ended && S.ctx.state === 'running' && S.ctx.currentTime >= S.nextStart) {
+    onDocEnd();
+  }
+
   S.raf = requestAnimationFrame(tick);
 }
 
@@ -910,6 +920,7 @@ async function startPlayback(from = 0, { reuseCtx = false } = {}) {
   S.prefetch.clear();
   S.running = true;
   S.done = false;
+  S.ended = false;
   S.activeChunk = -1;
   S.offset = estimateStart(from);
   S.t0 = S.ctx.currentTime;
@@ -933,6 +944,7 @@ function seekTo(i) {
   S.prefetch.clear();
   S.running = false;
   S.done = false;
+  S.ended = false;
 
   if (!S.ctx) {            // 还没开始播，就从这一段开始
     startPlayback(i);
@@ -970,6 +982,7 @@ function resetPlayer({ keepCtx = false } = {}) {
   S.nextStart = 0;
   S.prefetch.clear();
   S.done = false;
+  S.ended = false;
   S.activeChunk = -1;
   S.offset = 0;
   S.t0 = 0;
@@ -984,8 +997,12 @@ function resetPlayer({ keepCtx = false } = {}) {
 
 async function onToggle() {
   if (!S.doc) return;
-  if (!S.ctx || S.done) {
-    await startPlayback(S.done ? 0 : S.idx);
+  if (!S.ctx) {
+    await startPlayback(S.idx);
+    return;
+  }
+  if (S.ended) {              // 真播完了才重播；done 时音频可能还在放尾巴
+    await startPlayback(0);
     return;
   }
   if (S.ctx.state === 'running') {
@@ -994,7 +1011,7 @@ async function onToggle() {
   } else {
     await S.ctx.resume();
     setIcon('pause');
-    if (!S.running) {        // 暂停期间跳转过，得重新起泵
+    if (!S.running && !S.done) {   // done 时没有可调度的块了，别再起泵
       const gen = ++S.gen;
       S.running = true;
       pump(gen);
