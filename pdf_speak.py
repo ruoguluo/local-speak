@@ -37,6 +37,10 @@ _PROTECT = [
     r"\bJr\.", r"\bSr\.", r"\bvs\.", r"\betc\.", r"\be\.g\.", r"\bi\.e\.",
     r"\bFig\.", r"\bfig\.", r"\bNo\.", r"\bpp\.", r"\bVol\.", r"\bInc\.",
     r"\bLtd\.", r"\bal\.", r"\bcf\.", r"\bapprox\.",
+    # 法语：M. Dupont / Mme. / MM. 后面不是句子结尾
+    r"\bM\.", r"\bMM\.", r"\bMme\.", r"\bMlles?\.",
+    # 德语：z. B. / u. a. / d. h.
+    r"\bz\.\s?B\.", r"\bu\.\s?a\.", r"\bd\.\s?h\.",
 ]
 
 
@@ -194,8 +198,11 @@ def to_paragraphs(blocks: list[str], junk: set[str], strict: bool) -> list[str]:
 
 def sentences(para: str) -> list[str]:
     text = para
+    # 用函数式替换：直接改匹配到的文本，而不是把模式串当替换串。
+    # 早先写成 pat.replace(r"\.", ...) 会让 re.sub 把替换串里的 \b、\s
+    # 当成转义序列处理——\b 静默变成退格符混进文本，\s 直接抛 bad escape。
     for i, pat in enumerate(_PROTECT):
-        text = re.sub(pat, pat.replace(r"\.", f"\x00{i}\x00"), text)
+        text = re.sub(pat, lambda m, i=i: m.group(0).replace(".", f"\x00{i}\x00"), text)
     parts = re.split(r"(?<=[.!?])\s+", text)
     out = []
     for part in parts:

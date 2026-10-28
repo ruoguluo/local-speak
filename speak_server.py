@@ -50,12 +50,13 @@ TOKEN: str | None = None  # None 表示不校验
 
 
 class Doc:
-    def __init__(self, name: str, desc: str, chunks: list[tuple[str, bool]], chars: int):
+    def __init__(self, name: str, desc: str, chunks: list[tuple[str, bool]], chars: int, lang: str = "en"):
         self.id = uuid.uuid4().hex[:12]
         self.name = name
         self.desc = desc
         self.chunks = chunks
         self.chars = chars
+        self.lang = lang
         self.audio: OrderedDict[tuple, bytes] = OrderedDict()
 
     def meta(self) -> dict:
@@ -65,6 +66,8 @@ class Doc:
             "desc": self.desc,
             "chars": self.chars,
             "estSec": self.chars / 15,
+            "lang": self.lang,
+            "langModel": _LANG_MODEL.get(self.lang, ""),
             "total": len(self.chunks),
             "chunks": [{"i": i, "text": t, "paraEnd": p} for i, (t, p) in enumerate(self.chunks)],
         }
@@ -94,6 +97,11 @@ def synth_pcm(text: str, model: str, voice: str | None) -> bytes:
     if voice and voice != "default":
         payload["voice"] = voice
     resp = requests.post(ENDPOINT, json=payload, timeout=180)
+    # 每个语言模型的音色库是独立的，英语音色在法语模型上不存在。
+    # 前端会同步音色表，这里再兜一层：真撞上了就退回模型默认音色。
+    if resp.status_code == 400 and "voice" in resp.text and "voice" in payload:
+        payload.pop("voice")
+        resp = requests.post(ENDPOINT, json=payload, timeout=180)
     if resp.status_code != 200:
         raise RuntimeError(f"合成失败 HTTP {resp.status_code}: {resp.text[:200]}")
     return resp.content
@@ -143,10 +151,11 @@ def export_filename(doc: Doc) -> str:
     return f"{safe}.mp3"
 
 
-def list_voices() -> list[str]:
+def list_voices(model: str = "phonon") -> list[str]:
+    """音色库按模型独立：英语模型 38 个，法语模型只有 16 个法语名字。"""
     try:
         out = subprocess.run(
-            ["ollama", "show", "phonon"], capture_output=True, text=True, timeout=20
+            ["ollama", "show", model], capture_output=True, text=True, timeout=20
         ).stdout
     except Exception:
         return ["default"]
@@ -175,6 +184,44 @@ def list_models() -> list[str]:
         if line.strip() and line.split()[0].startswith("phonon")
     ]
     return models or ["phonon"]
+
+
+# 语言识别用「变音符号 + 高频词」的粗打分，够用来挑模型，不需要引入检测库
+_LANG_DIACRITICS = {
+    "fr": "àâçéèêëîïôûùüÿœæ",
+    "de": "äöüß",
+    "es": "ñáíóú¿¡",
+    "pt": "ãõáâêç",
+}
+_LANG_WORDS = {
+    "fr": {"le", "la", "les", "des", "une", "est", "dans", "pour", "que", "qui",
+           "pas", "vous", "nous", "avec", "sur", "du", "ce", "cette", "sont", "il"},
+    "de": {"der", "die", "das", "und", "ist", "nicht", "mit", "sich", "auf", "für",
+           "ein", "eine", "dem", "den", "werden", "auch", "wir", "sie", "von"},
+    "es": {"los", "las", "que", "en", "una", "es", "por", "con", "para", "se",
+           "su", "del", "como", "pero", "más", "este", "hay", "muy"},
+    "pt": {"os", "as", "que", "em", "uma", "é", "por", "com", "para", "não",
+           "se", "do", "da", "dos", "das", "mais", "como", "você"},
+}
+_LANG_MODEL = {
+    "fr": "phonon:40m-fr",
+    "de": "phonon:40m-de",
+    "es": "phonon:40m-es",
+    "pt": "phonon:40m-pt",
+}
+
+
+def detect_lang(text: str) -> str:
+    sample = text[:4000].lower()
+    words = re.findall(r"[a-zà-ÿœæ]+", sample)
+    best, best_score = "en", 0
+    for code, diacritics in _LANG_DIACRITICS.items():
+        diac = sum(1 for c in sample if c in diacritics)
+        common = sum(1 for w in words if w in _LANG_WORDS[code])
+        score = diac * 2 + common
+        if score > best_score:
+            best, best_score = code, score
+    return best if best_score >= 5 else "en"
 
 
 def lan_ips() -> list[str]:
@@ -216,7 +263,7 @@ def finalize(blocks: list[str], desc: str, name: str, is_pdf: bool) -> tuple[Doc
     chunks = to_chunks(paras)
     if not chunks:
         return None, "清洗后没有可用文本。"
-    return Doc(name, desc, chunks, sum(len(c[0]) for c in chunks)), ""
+    return Doc(name, desc, chunks, sum(len(c[0]) for c in chunks), detect_lang(text)), ""
 
 
 def build_doc(raw: bytes, filename: str) -> tuple[Doc | None, str]:
@@ -350,7 +397,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(page.read_bytes(), "text/html; charset=utf-8")
 
         if path == "/api/voices":
-            return self.send_json({"voices": list_voices(), "models": list_models()})
+            q = parse_qs(urlparse(self.path).query)
+            model = q.get("model", ["phonon"])[0]
+            return self.send_json({"voices": list_voices(model), "models": list_models()})
 
         if path == "/api/preview":
             q = parse_qs(urlparse(self.path).query)

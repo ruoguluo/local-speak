@@ -32,8 +32,11 @@ python pdf_speak.py book.pdf --dry-run        # 只看断句结果，不发声
 - [Ollama](https://ollama.com/download) **0.40.11 或更新**，并已拉取模型：
 
   ```bash
-  ollama pull phonon
+  ollama pull phonon            # 英语（基础模型）
+  ollama pull phonon:40m-fr     # 法语，其他语言同理
   ```
+
+  各语言模型是独立权重，**不装对应语言模型就只能用它读英语**。
 
 - 语音功能目前**只支持 Apple Silicon 的 macOS**（Ollama 的语音能力尚未覆盖 Windows / Linux）
 
@@ -64,6 +67,22 @@ python3 speak_server.py --lan --token
 然后打开 <http://127.0.0.1:8765>，把要读的文字粘进文本框，点「添加并朗读」。macOS 上也可以直接双击 `启动朗读.command` 或 `局域网共享.command`。
 
 首次以 `--lan` 启动时，macOS 会弹窗询问是否允许 Python 接受传入连接，需要选「允许」。
+
+## 多语言
+
+Phonon 按语言分模型，**每个语言模型还有自己独立的音色库**：
+
+| 语言 | 模型 | 音色数 |
+|---|---|---|
+| 英语 | `phonon` | 38（Zoey、Hugh、Grub the Ogre…）|
+| 法语 | `phonon:40m-fr` | 16（Arnaud、Coralie、Hélène…）|
+| 德语 | `phonon:40m-de` | 独立一套 |
+| 西班牙语 | `phonon:40m-es` | 独立一套 |
+| 葡萄牙语 | `phonon:40m-pt` | 独立一套 |
+
+**用英语模型读法语会明显不对劲**——那是拿英语音系去套法语发音。所以粘贴内容时会自动识别语言并切到对应模型，同时把音色表换成该模型的；切回英语时再切回基础模型。
+
+音色列表是跟着模型走的：英语的 `Zoey` 在法语模型上不存在，强行传会直接 400 `voice not found`。界面上换模型会自动刷新音色下拉。
 
 ## 工作原理
 
