@@ -90,15 +90,27 @@
   }
   .label { font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
 
-  .drop {
-    border: 1px dashed var(--line); border-radius: 10px;
-    padding: 22px 18px; text-align: center; cursor: pointer;
-    transition: border-color .15s, background .15s;
+  .paste {
+    width: 100%; min-height: 120px; resize: vertical;
+    padding: 10px 12px; font: inherit; font-size: 14px; line-height: 1.65;
+    color: var(--ink); background: var(--card);
+    border: 1px solid var(--line); border-radius: 8px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
   }
-  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-  .drop.busy { opacity: .55; pointer-events: none; }
-  .drop strong { font-weight: 500; display: block; margin-bottom: 4px; }
-  .drop span { font-size: 13px; color: var(--ink-3); }
+  .paste::placeholder { color: var(--ink-3); }
+  .paste:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .paste-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-top: 10px;
+  }
+  .btn-primary {
+    flex: 0 0 auto; padding: 8px 18px; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff;
+    font: inherit; font-size: 14px; cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn-primary:hover:not(:disabled) { opacity: .88; }
+  .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
 
   .link {
     font-size: 13px; color: var(--accent); cursor: pointer;
@@ -216,14 +228,12 @@
   }
   .alert.show { display: block; }
   .hint { font-size: 12px; color: var(--ink-3); margin-top: 10px; }
-  .spin { display: inline-block; animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 <div class="page">
   <h1>本地朗读</h1>
-  <p class="sub">PDF / TXT / Markdown → 本地 Phonon 合成 → 浏览器播放。全程不出这台机器。</p>
+  <p class="sub">粘贴一段文字 → 本地 Phonon 合成 → 浏览器播放。全程不出这台机器。</p>
 
   <div class="alert" id="alert"></div>
 
@@ -231,18 +241,23 @@
     <aside class="side">
       <div class="side-head">
         <span class="label">播放列表</span>
-        <button class="link" id="addBtn">＋ 添加</button>
+        <button class="link" id="addBtn">＋ 粘贴</button>
       </div>
       <div class="playlist" id="playlist"></div>
     </aside>
 
     <main>
       <div class="card">
-        <div class="drop" id="drop">
-          <strong>添加文件或拖进来</strong>
-          <span>可多选 · .pdf · .txt · .md</span>
+        <div class="card-head">
+          <span class="label">粘贴文字</span>
+          <span class="hint" id="charCount" style="margin:0"></span>
         </div>
-        <input type="file" id="fileInput" accept=".pdf,.txt,.text,.md,.markdown" multiple hidden>
+        <textarea id="pasteBox" class="paste" rows="5"
+          placeholder="把要朗读的文字粘贴到这里…&#10;支持英 / 法 / 德 / 西 / 葡五种语言"></textarea>
+        <div class="paste-foot">
+          <span class="hint" style="margin:0">⌘ + Enter 也可以直接添加</span>
+          <button class="btn-primary" id="addText" disabled>添加并朗读</button>
+        </div>
       </div>
 
   <div class="card">
@@ -334,10 +349,6 @@ function fmt(sec) {
   return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
 }
 
-function b64utf8(s) {
-  return btoa(String.fromCharCode(...new TextEncoder().encode(s)));
-}
-
 function showError(msg) {
   const el = $('#alert');
   el.textContent = msg;
@@ -355,42 +366,41 @@ function setIcon(kind) {
 
 /* ---------- 播放列表 ---------- */
 
-async function uploadFile(file) {
-  const res = await fetch('/api/open', {
-    method: 'POST',
-    headers: { 'X-Filename': b64utf8(file.name) },
-    body: await file.arrayBuffer(),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || '解析失败');
-  return { ...data, done: false };
+function updatePasteState() {
+  const n = $('#pasteBox').value.trim().length;
+  $('#addText').disabled = n < 40;
+  $('#charCount').textContent = n ? `${n} 字符` : '';
 }
 
-async function addFiles(fileList) {
-  const files = [...fileList];
-  if (!files.length) return;
-  const drop = $('#drop');
-  drop.classList.add('busy');
-  const original = drop.innerHTML;
+async function addText() {
+  const box = $('#pasteBox');
+  const text = box.value.trim();
+  if (text.length < 40) return;
 
-  for (let n = 0; n < files.length; n++) {
-    drop.innerHTML = `<strong><span class="spin">◐</span> 解析 ${n + 1}/${files.length}…</strong>`;
-    try {
-      const item = await uploadFile(files[n]);
-      S.queue.push(item);
-      if (S.cur === -1) S.cur = 0;
-    } catch (e) {
-      showError(`${files[n].name}：${e.message}`);
-    }
-  }
+  const btn = $('#addText');
+  btn.disabled = true;
+  btn.textContent = '添加中…';
+  try {
+    const res = await fetch('/api/text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '添加失败');
 
-  drop.classList.remove('busy');
-  drop.innerHTML = original;
-  if (S.cur >= 0 && !S.doc) {
-    S.doc = S.queue[S.cur];
-    renderDoc();
+    data.done = false;
+    S.queue.push(data);
+    box.value = '';
+    updatePasteState();
+    renderPlaylist();
+    await selectItem(S.queue.length - 1, { autoplay: true });   // 粘完直接开读
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    btn.textContent = '添加并朗读';
+    updatePasteState();
   }
-  renderPlaylist();
 }
 
 function renderPlaylist() {
@@ -399,7 +409,7 @@ function renderPlaylist() {
   if (!S.queue.length) {
     const empty = document.createElement('div');
     empty.className = 'pl-empty';
-    empty.textContent = '还没有文件。点「＋ 添加」，或把文件拖到右边。';
+    empty.textContent = '还没有内容。在右边粘贴一段文字。';
     box.append(empty);
     return;
   }
@@ -718,7 +728,7 @@ function renderNotes(opts = {}) {
     empty.className = 'note-empty';
     empty.textContent = S.doc
       ? '还没有笔记。播放时点「＋ 记笔记」，会记下当前进度。'
-      : '先添加一个文件。';
+      : '先在右边粘贴一段文字。';
     box.append(empty);
     return;
   }
@@ -981,21 +991,14 @@ $('#addNote').addEventListener('click', addNote);
 $('#copyNotes').addEventListener('click', copyNotes);
 $('#download').addEventListener('click', downloadMp3);
 
-$('#drop').addEventListener('click', () => $('#fileInput').click());
-$('#addBtn').addEventListener('click', () => $('#fileInput').click());
-$('#fileInput').addEventListener('change', (e) => {
-  addFiles(e.target.files);
-  e.target.value = '';
-});
-
-['dragenter', 'dragover'].forEach((ev) =>
-  $('#drop').addEventListener(ev, (e) => { e.preventDefault(); $('#drop').classList.add('over'); })
-);
-['dragleave', 'drop'].forEach((ev) =>
-  $('#drop').addEventListener(ev, (e) => { e.preventDefault(); $('#drop').classList.remove('over'); })
-);
-$('#drop').addEventListener('drop', (e) => {
-  addFiles(e.dataTransfer.files);
+$('#addText').addEventListener('click', addText);
+$('#addBtn').addEventListener('click', () => $('#pasteBox').focus());
+$('#pasteBox').addEventListener('input', updatePasteState);
+$('#pasteBox').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    addText();
+  }
 });
 
 /* 自绘下拉：不依赖原生 select 弹层，WebView 里也能正常用 */

@@ -1,16 +1,15 @@
 # 本地朗读
 
-把 PDF / TXT / Markdown 读出来，全程离线。语音合成跑在本机的 [Ollama](https://ollama.com) 上，用的是 Gradium 的 [Phonon](https://ollama.com/library/phonon) 语音模型——文件不出机器，没有 API 费用。
+把文字读出来，全程离线。语音合成跑在本机的 [Ollama](https://ollama.com) 上，用的是 Gradium 的 [Phonon](https://ollama.com/library/phonon) 语音模型——内容不出机器，没有 API 费用。
 
-带播放列表、分段跳转、按时间戳记笔记的 Web 界面，另外附带一个命令行版本。
-
-![界面截图](docs/screenshot.png)
+Web 界面里粘贴一段文字就能听，带播放列表、分段跳转、按时间戳记笔记。想读整份 PDF / TXT / Markdown 文件，用附带的命令行版本。
 
 ## 功能
 
 **Web 界面**（`speak_server.py`）
 
-- 侧边播放列表：一次拖入多个文件，播完自动接下一首
+- 粘贴即读：贴进文本框点一下就开始朗读，⌘ + Enter 也行
+- 侧边播放列表：粘过的内容依次排队，播完自动接下一段
 - 分段文本列表：点任意段落从那里开始播
 - 暂停 / 继续停在任意位置，不丢进度
 - 38 个音色，含 Grub the Ogre、The Snow Queen 这类角色音色
@@ -18,7 +17,7 @@
 - 一键导出 MP3：把整篇合成为 64 kbps 单声道 MP3 下载，边合成边传输，生成过程中可随时取消
 - 可只监听本机，也可开放给同网络的其他设备（可选访问令牌）
 
-**命令行**（`pdf_speak.py`）
+**命令行**（`pdf_speak.py`，用于整份文件）
 
 ```bash
 python pdf_speak.py book.pdf                  # 直接朗读
@@ -62,7 +61,7 @@ python3 speak_server.py --lan
 python3 speak_server.py --lan --token
 ```
 
-然后打开 <http://127.0.0.1:8765>。macOS 上也可以直接双击 `启动朗读.command` 或 `局域网共享.command`。
+然后打开 <http://127.0.0.1:8765>，把要读的文字粘进文本框，点「添加并朗读」。macOS 上也可以直接双击 `启动朗读.command` 或 `局域网共享.command`。
 
 首次以 `--lan` 启动时，macOS 会弹窗询问是否允许 Python 接受传入连接，需要选「允许」。
 
@@ -90,7 +89,7 @@ PDF 里是一堆定位好的字形，不是句子，所以要先重建文本：
 
 - **只支持英语、法语、德语、西班牙语、葡萄牙语**。中文、日文等会念出乱码，程序里检测到 CJK 字符占比超过 3% 会直接报错退出
 - 没有声音克隆，音色只能从固定库里选
-- 扫描版 PDF（图片型）抽不到文字，需要先做 OCR
+- 扫描版 PDF（图片型）抽不到文字，需要先做 OCR（命令行版本才有这个问题，Web 界面只接受粘贴的文本）
 - 笔记存在浏览器 localStorage 里，按来源隔离：`127.0.0.1` 和局域网 IP 是两套，换设备也不同步
 
 ### 许可提醒
@@ -105,8 +104,8 @@ pdf_speak.py           文本处理 + 命令行朗读
 make_icon.py           生成 favicon.ico（纯标准库）
 web/index.html         前端单页
 web/favicon.svg        图标源文件
-sample.txt             测试用纯文本（含断字、列表、分隔线）
-sample.pdf             测试用 PDF（含页眉、页码、硬换行）
+sample.txt             命令行测试用纯文本（含断字、列表、分隔线）
+sample.pdf             命令行测试用 PDF（含页眉、页码、硬换行）
 启动朗读.command        双击启动，仅本机
 局域网共享.command      双击启动，同网络可访问
 ```

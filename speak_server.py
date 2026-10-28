@@ -200,6 +200,25 @@ def lan_ips() -> list[str]:
     return ips
 
 
+def finalize(blocks: list[str], desc: str, name: str, is_pdf: bool) -> tuple[Doc | None, str]:
+    """文件与粘贴文本共用的清洗、校验与分块。"""
+    text = "\n".join(blocks)
+    cjk = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
+    if cjk and cjk / max(len(text.strip()), 1) > 0.03:
+        return None, f"内容里有 {cjk / len(text):.0%} 的中文，但 Phonon 只支持英/法/德/西/葡，读不了中文。"
+    if len(text.strip()) < 40:
+        if is_pdf:
+            return None, "几乎没有抽到文字。这大概是扫描版 PDF，需要先 OCR 才能朗读。"
+        return None, "内容太短了，至少需要 40 个字符。"
+
+    junk = running_heads(blocks) if is_pdf else set()
+    paras = to_paragraphs(blocks, junk, strict=is_pdf)
+    chunks = to_chunks(paras)
+    if not chunks:
+        return None, "清洗后没有可用文本。"
+    return Doc(name, desc, chunks, sum(len(c[0]) for c in chunks)), ""
+
+
 def build_doc(raw: bytes, filename: str) -> tuple[Doc | None, str]:
     suffix = Path(filename).suffix.lower()
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -209,22 +228,22 @@ def build_doc(raw: bytes, filename: str) -> tuple[Doc | None, str]:
         blocks, desc, is_pdf = load(tmp_path, None, None)
     finally:
         tmp_path.unlink(missing_ok=True)
+    return finalize(blocks, desc, filename, is_pdf)
 
-    text = "\n".join(blocks)
-    cjk = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
-    if cjk and cjk / max(len(text.strip()), 1) > 0.03:
-        return None, f"这份文件里有 {cjk / len(text):.0%} 的中文，但 Phonon 只支持英/法/德/西/葡，读不了中文。"
-    if len(text.strip()) < 40:
-        if is_pdf:
-            return None, "几乎没有抽到文字。这大概是扫描版 PDF，需要先 OCR 才能朗读。"
-        return None, "文件里没有可用文字。"
 
-    junk = running_heads(blocks) if is_pdf else set()
-    paras = to_paragraphs(blocks, junk, strict=is_pdf)
-    chunks = to_chunks(paras)
-    if not chunks:
-        return None, "清洗后没有可用文本。"
-    return Doc(filename, desc, chunks, sum(len(c[0]) for c in chunks)), ""
+def derive_name(text: str) -> str:
+    """用第一行非空文字给粘贴内容起名，播放列表里好认。"""
+    for line in text.splitlines():
+        s = re.sub(r"\s+", " ", line.strip())
+        if s:
+            return (s[:40] + "…") if len(s) > 40 else s
+    return "粘贴文本"
+
+
+def build_doc_from_text(text: str, name: str | None = None) -> tuple[Doc | None, str]:
+    if not text.strip():
+        return None, "没有收到文字。"
+    return finalize([text], "粘贴文本", name or derive_name(text), False)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -416,6 +435,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             return self.send_json({"error": "需要访问令牌"}, 401)
 
+        # 文件上传接口：Web 界面已改为只接受粘贴文本，此接口保留给 curl / 脚本调用
         if path == "/api/open":
             raw = self.rfile.read(length) if length else b""
             try:
@@ -430,6 +450,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(exc)}, 400)
             except Exception as exc:
                 return self.send_json({"error": f"解析失败：{exc}"}, 400)
+            if not doc:
+                return self.send_json({"error": err}, 400)
+            with LOCK:
+                DOCS[doc.id] = doc
+            return self.send_json(doc.meta())
+
+        if path == "/api/text":
+            body = self.rfile.read(length) if length else b""
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except Exception:
+                return self.send_json({"error": "请求格式错误"}, 400)
+            text = payload.get("text") or ""
+            name = (payload.get("name") or "").strip() or None
+            if not isinstance(text, str):
+                return self.send_json({"error": "text 必须是字符串"}, 400)
+            try:
+                doc, err = build_doc_from_text(text, name)
+            except Exception as exc:
+                return self.send_json({"error": f"处理失败：{exc}"}, 400)
             if not doc:
                 return self.send_json({"error": err}, 400)
             with LOCK:
