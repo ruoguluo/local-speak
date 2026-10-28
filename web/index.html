@@ -83,7 +83,9 @@
   .card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 12px; padding: 18px; margin-bottom: 12px;
+    transition: border-color .15s, background .15s;
   }
+  .card.over { border-color: var(--accent); background: var(--accent-soft); }
   .card-head {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 12px;
@@ -241,19 +243,23 @@
     <aside class="side">
       <div class="side-head">
         <span class="label">播放列表</span>
-        <button class="link" id="addBtn">＋ 粘贴</button>
+        <span class="head-actions">
+          <button class="link" id="addFileBtn">＋ 文件</button>
+          <button class="link" id="addBtn">＋ 粘贴</button>
+        </span>
       </div>
       <div class="playlist" id="playlist"></div>
+      <input type="file" id="fileInput" accept=".pdf,.txt,.text,.md,.markdown" multiple hidden>
     </aside>
 
     <main>
-      <div class="card">
+      <div class="card" id="inputCard">
         <div class="card-head">
           <span class="label">粘贴文字</span>
           <span class="hint" id="charCount" style="margin:0"></span>
         </div>
         <textarea id="pasteBox" class="paste" rows="5"
-          placeholder="把要朗读的文字粘贴到这里…&#10;支持英 / 法 / 德 / 西 / 葡五种语言"></textarea>
+          placeholder="把要朗读的文字粘贴到这里…&#10;支持英 / 法 / 德 / 西 / 葡五种语言&#10;也可以把 PDF / TXT / MD 文件拖进来"></textarea>
         <div class="paste-foot">
           <span class="hint" id="pasteHint" style="margin:0">⌘ + Enter 也可以直接添加</span>
           <button class="btn-primary" id="addText" disabled>添加并朗读</button>
@@ -372,6 +378,59 @@ function setIcon(kind) {
 
 /* ---------- 播放列表 ---------- */
 
+function b64utf8(s) {
+  return btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+}
+
+/* 非英语内容换对应语言模型；切回英语时也要切回基础模型，
+   否则英语同样会被别的语言的音系带偏 */
+async function applyLangModel(data) {
+  const target = data.langModel || BASE_MODEL;
+  if (!target || !MODELS.includes(target) || S.model === target) return;
+  S.model = target;
+  modelDD.setOptions(MODELS, target);
+  await loadVoices(target, target === BASE_MODEL ? 'Zoey' : 'default');
+  $('#pasteHint').textContent = data.langModel
+    ? `检测到${LANG_NAME[data.lang] || data.lang}，已切换到 ${target}`
+    : `已切回英语模型 ${target}`;
+}
+
+async function uploadFile(file) {
+  const res = await fetch('/api/open', {
+    method: 'POST',
+    headers: { 'X-Filename': b64utf8(file.name) },
+    body: await file.arrayBuffer(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '解析失败');
+  return { ...data, done: false };
+}
+
+async function addFiles(fileList) {
+  const files = [...fileList];
+  if (!files.length) return;
+  const btn = $('#addFileBtn');
+  const label = btn.textContent;
+  let firstAdded = -1;
+
+  for (let n = 0; n < files.length; n++) {
+    btn.textContent = `解析 ${n + 1}/${files.length}…`;
+    try {
+      const item = await uploadFile(files[n]);
+      if (firstAdded < 0) firstAdded = S.queue.length;
+      S.queue.push(item);
+    } catch (e) {
+      showError(`${files[n].name}：${e.message}`);
+    }
+  }
+
+  btn.textContent = label;
+  if (firstAdded < 0) return;
+  renderPlaylist();
+  await applyLangModel(S.queue[firstAdded]);
+  await selectItem(firstAdded, { autoplay: true });
+}
+
 function updatePasteState() {
   const n = $('#pasteBox').value.trim().length;
   $('#addText').disabled = n < 40;
@@ -396,17 +455,7 @@ async function addText() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '添加失败');
 
-    // 检测到非英语内容时换成对应语言模型——用英语模型读法语等于用英语音系硬套；
-    // 反过来，法语之后粘英语也要切回基础模型，否则英语同样会被法语音系带偏
-    const target = data.langModel || BASE_MODEL;
-    if (target && MODELS.includes(target) && S.model !== target) {
-      S.model = target;
-      modelDD.setOptions(MODELS, target);
-      await loadVoices(target, target === BASE_MODEL ? 'Zoey' : 'default');
-      $('#pasteHint').textContent = data.langModel
-        ? `检测到${LANG_NAME[data.lang] || data.lang}，已切换到 ${target}`
-        : `已切回英语模型 ${target}`;
-    }
+    await applyLangModel(data);
 
     data.done = false;
     S.queue.push(data);
@@ -929,6 +978,12 @@ async function startPlayback(from = 0, { reuseCtx = false } = {}) {
   cancelAnimationFrame(S.raf);
   tick();
   pump(gen);
+
+  // 没有用户手势时浏览器会把 AudioContext 挂起，表现为"图标是暂停但没声音"
+  if (S.ctx.state !== 'running') {
+    setIcon('play');
+    showError('浏览器拦截了自动播放，点一下播放按钮即可开始。');
+  }
 }
 
 /* 跳转到第 i 段：先掐掉已排队的音源，再重置调度基准 */
@@ -1028,6 +1083,28 @@ $('#download').addEventListener('click', downloadMp3);
 
 $('#addText').addEventListener('click', addText);
 $('#addBtn').addEventListener('click', () => $('#pasteBox').focus());
+$('#addFileBtn').addEventListener('click', () => $('#fileInput').click());
+$('#fileInput').addEventListener('change', (e) => {
+  addFiles(e.target.files);
+  e.target.value = '';
+});
+
+const inputCard = $('#inputCard');
+['dragenter', 'dragover'].forEach((ev) =>
+  inputCard.addEventListener(ev, (e) => {
+    e.preventDefault();
+    inputCard.classList.add('over');
+  })
+);
+['dragleave', 'drop'].forEach((ev) =>
+  inputCard.addEventListener(ev, (e) => {
+    e.preventDefault();
+    inputCard.classList.remove('over');
+  })
+);
+inputCard.addEventListener('drop', (e) => {
+  if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
 $('#pasteBox').addEventListener('input', updatePasteState);
 $('#pasteBox').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
