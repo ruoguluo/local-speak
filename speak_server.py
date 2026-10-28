@@ -186,7 +186,8 @@ def list_models() -> list[str]:
     return models or ["phonon"]
 
 
-# 语言识别用「变音符号 + 高频词」的粗打分，够用来挑模型，不需要引入检测库
+# 语言识别：变音符号密度 + 高频词占比。词表刻意只收各语言独有或强特征的词，
+# 像 as / no 这类英语里也常见的词不能放进去，否则英文会被误判。
 _LANG_DIACRITICS = {
     "fr": "àâçéèêëîïôûùüÿœæ",
     "de": "äöüß",
@@ -194,14 +195,16 @@ _LANG_DIACRITICS = {
     "pt": "ãõáâêç",
 }
 _LANG_WORDS = {
-    "fr": {"le", "la", "les", "des", "une", "est", "dans", "pour", "que", "qui",
-           "pas", "vous", "nous", "avec", "sur", "du", "ce", "cette", "sont", "il"},
-    "de": {"der", "die", "das", "und", "ist", "nicht", "mit", "sich", "auf", "für",
-           "ein", "eine", "dem", "den", "werden", "auch", "wir", "sie", "von"},
-    "es": {"los", "las", "que", "en", "una", "es", "por", "con", "para", "se",
-           "su", "del", "como", "pero", "más", "este", "hay", "muy"},
-    "pt": {"os", "as", "que", "em", "uma", "é", "por", "com", "para", "não",
-           "se", "do", "da", "dos", "das", "mais", "como", "você"},
+    "fr": {"le", "la", "les", "des", "une", "est", "dans", "pour", "que", "qui", "pas",
+           "vous", "nous", "avec", "sur", "du", "ce", "cette", "sont", "il", "au", "aux", "et", "par"},
+    "de": {"der", "die", "das", "und", "ist", "nicht", "mit", "sich", "auf", "für", "ein",
+           "eine", "dem", "den", "werden", "auch", "wir", "sie", "von", "zu", "im", "als"},
+    "es": {"el", "los", "las", "que", "en", "una", "es", "por", "con", "para", "se", "su",
+           "del", "como", "pero", "más", "este", "hay", "muy", "son", "está", "también", "cuando",
+           "al", "lo", "porque", "hoy", "tiene", "hacer", "desde", "entre", "sin", "sobre"},
+    "pt": {"do", "da", "dos", "das", "com", "não", "uma", "pelo", "pela", "mais", "você", "são",
+           "está", "também", "muito", "quando", "porque", "mas", "já", "só", "na", "nas", "nos",
+           "ao", "aos", "os", "em", "por", "para", "hoje", "tem", "fazer", "desde", "entre", "sem", "sobre"},
 }
 _LANG_MODEL = {
     "fr": "phonon:40m-fr",
@@ -214,14 +217,16 @@ _LANG_MODEL = {
 def detect_lang(text: str) -> str:
     sample = text[:4000].lower()
     words = re.findall(r"[a-zà-ÿœæ]+", sample)
-    best, best_score = "en", 0
+    if not words:
+        return "en"
+    best, best_score = "en", 0.0
     for code, diacritics in _LANG_DIACRITICS.items():
-        diac = sum(1 for c in sample if c in diacritics)
-        common = sum(1 for w in words if w in _LANG_WORDS[code])
-        score = diac * 2 + common
+        density = sum(1 for c in sample if c in diacritics) / len(sample) * 100
+        hits = sum(1 for w in words if w in _LANG_WORDS[code])
+        score = density * 0.5 + (hits / len(words)) * 12
         if score > best_score:
             best, best_score = code, score
-    return best if best_score >= 5 else "en"
+    return best if best_score >= 0.9 else "en"
 
 
 def lan_ips() -> list[str]:
