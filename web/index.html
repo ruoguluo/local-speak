@@ -409,6 +409,7 @@ async function uploadFile(file) {
 async function addFiles(fileList) {
   const files = [...fileList];
   if (!files.length) return;
+  unlockAudio();          // 趁手势还在，先把音频上下文解锁
   const btn = $('#addFileBtn');
   const label = btn.textContent;
   let firstAdded = -1;
@@ -441,6 +442,7 @@ async function addText() {
   const box = $('#pasteBox');
   const text = box.value.trim();
   if (text.length < 40) return;
+  unlockAudio();          // 趁手势还在，先把音频上下文解锁
 
   const btn = $('#addText');
   btn.disabled = true;
@@ -954,6 +956,16 @@ function tick() {
   S.raf = requestAnimationFrame(tick);
 }
 
+/* 必须在点击的同步阶段调用：Safari 要求 AudioContext 的创建与 resume 发生在
+   用户手势内，等 await 完再建就已经脱离手势，会被挂起甚至让 resume 一直不 resolve。 */
+function unlockAudio() {
+  if (!S.ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    try { S.ctx = new AC(); } catch (_) { return; }
+  }
+  if (S.ctx.state === 'suspended') S.ctx.resume().catch(() => {});
+}
+
 async function startPlayback(from = 0, { reuseCtx = false } = {}) {
   // 自动续播时必须复用已有的 AudioContext，新建的会被自动播放策略挂起
   if (S.ctx && !reuseCtx) { S.ctx.close().catch(() => {}); S.ctx = null; }
@@ -962,7 +974,8 @@ async function startPlayback(from = 0, { reuseCtx = false } = {}) {
     S.ctx = new AC();
   }
   if (S.ctx.state === 'suspended') {
-    try { await S.ctx.resume(); } catch (_) {}
+    // resume 有可能永远不 resolve（没有用户手势时），加超时兜底，别把播放卡死
+    try { await Promise.race([S.ctx.resume(), sleep(1500)]); } catch (_) {}
   }
   S.sources = [];
   S.timeline = [];
