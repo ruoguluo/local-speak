@@ -252,16 +252,22 @@ def lan_ips() -> list[str]:
     return ips
 
 
-def finalize(blocks: list[str], desc: str, name: str, is_pdf: bool) -> tuple[Doc | None, str]:
-    """文件与粘贴文本共用的清洗、校验与分块。"""
+def finalize(
+    blocks: list[str], desc: str, name: str, is_pdf: bool, min_chars: int = 40
+) -> tuple[Doc | None, str]:
+    """文件与粘贴文本共用的清洗、校验与分块。
+
+    min_chars 对文件是 40（低于这个数基本是扫描版 PDF 抽不出字），
+    对粘贴文本则是 1——用户想读一个单词就该读，不该拦。
+    """
     text = "\n".join(blocks)
     cjk = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
     if cjk and cjk / max(len(text.strip()), 1) > 0.03:
         return None, f"内容里有 {cjk / len(text):.0%} 的中文，但 Phonon 只支持英/法/德/西/葡，读不了中文。"
-    if len(text.strip()) < 40:
+    if len(text.strip()) < min_chars:
         if is_pdf:
             return None, "几乎没有抽到文字。这大概是扫描版 PDF，需要先 OCR 才能朗读。"
-        return None, "内容太短了，至少需要 40 个字符。"
+        return None, "没有收到文字。"
 
     junk = running_heads(blocks) if is_pdf else set()
     paras = to_paragraphs(blocks, junk, strict=is_pdf)
@@ -295,7 +301,7 @@ def derive_name(text: str) -> str:
 def build_doc_from_text(text: str, name: str | None = None) -> tuple[Doc | None, str]:
     if not text.strip():
         return None, "没有收到文字。"
-    return finalize([text], "粘贴文本", name or derive_name(text), False)
+    return finalize([text], "粘贴文本", name or derive_name(text), False, min_chars=1)
 
 
 class Handler(BaseHTTPRequestHandler):

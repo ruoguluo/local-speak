@@ -434,14 +434,14 @@ async function addFiles(fileList) {
 
 function updatePasteState() {
   const n = $('#pasteBox').value.trim().length;
-  $('#addText').disabled = n < 40;
+  $('#addText').disabled = n === 0;   // 只要不是空的就能读，别再设字数门槛
   $('#charCount').textContent = n ? `${n} 字符` : '';
 }
 
 async function addText() {
   const box = $('#pasteBox');
   const text = box.value.trim();
-  if (text.length < 40) return;
+  if (!text) return;
   unlockAudio();          // 趁手势还在，先把音频上下文解锁
 
   const btn = $('#addText');
