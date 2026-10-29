@@ -389,7 +389,7 @@ async function applyLangModel(data) {
   if (!target || !MODELS.includes(target) || S.model === target) return;
   S.model = target;
   modelDD.setOptions(MODELS, target);
-  await loadVoices(target, target === BASE_MODEL ? 'Zoey' : 'default');
+  await loadVoices(target, 'default');
   $('#pasteHint').textContent = data.langModel
     ? `检测到${LANG_NAME[data.lang] || data.lang}，已切换到 ${target}`
     : `已切回英语模型 ${target}`;
@@ -1254,7 +1254,7 @@ $('#preview').addEventListener('click', async () => {
     S.model = BASE_MODEL;
     modelDD.setOptions(models, BASE_MODEL);
 
-    const voices = await loadVoices(S.model, 'Zoey');
+    const voices = await loadVoices(S.model, 'default');
   } catch (e) {
     showError('连不上后端，确认 speak_server.py 还在运行。');
   }
