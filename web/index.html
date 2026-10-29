@@ -929,8 +929,10 @@ function paintActive(i) {
 
 function paintProgress() {
   if (!S.ctx || !S.doc) return;
-  const elapsed = S.offset + (S.ctx.currentTime - S.t0);
   const denom = Math.max(S.doc.estSec, S.offset + S.nextStart, 1);
+  // ctx.currentTime 播完后还在继续走，不夹住的话时间会一直往前跑
+  const raw = S.offset + (S.ctx.currentTime - S.t0);
+  const elapsed = S.ended ? denom : Math.min(raw, denom);
   $('#barFill').style.width = Math.min(100, (elapsed / denom) * 100) + '%';
   $('#timeText').textContent = `${fmt(elapsed)} / 约 ${fmt(denom)}`;
   $('#segText').textContent = `第 ${Math.min(S.idx, S.doc.total)} / ${S.doc.total} 段`;
