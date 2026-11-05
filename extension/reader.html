@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地朗读</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<meta name="theme-color" content="#185FA5">
+<style>
+  :root {
+    --bg: #FBFAF7;
+    --card: #FFFFFF;
+    --line: #E4E1D9;
+    --line-soft: #EFEDE6;
+    --ink: #2C2C2A;
+    --ink-2: #5F5E5A;
+    --ink-3: #888780;
+    --accent: #185FA5;
+    --accent-soft: #E6F1FB;
+    --danger: #A32D2D;
+    --danger-soft: #FCEBEB;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px 64px;
+    background: var(--bg); color: var(--ink);
+    font: 400 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 24px; }
+
+  .layout {
+    display: grid; grid-template-columns: 236px minmax(0, 1fr);
+    gap: 16px; align-items: start;
+  }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .side {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px; position: sticky; top: 24px;
+  }
+  @media (max-width: 820px) {
+    .side { position: static; }
+  }
+  .side-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .head-actions { display: flex; align-items: center; gap: 14px; }
+  .playlist { display: flex; flex-direction: column; gap: 2px; max-height: 62vh; overflow-y: auto; }
+  .pl-empty { font-size: 12px; color: var(--ink-3); line-height: 1.6; padding: 6px 4px; }
+  .pl-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 8px; border-radius: 8px; cursor: pointer;
+  }
+  .pl-item:hover { background: var(--line-soft); }
+  .pl-item.active { background: var(--accent-soft); }
+  .pl-item.done .pl-name { color: var(--ink-3); }
+  .pl-idx {
+    flex: 0 0 auto; width: 13px; text-align: right;
+    font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+  }
+  .pl-body { flex: 1; min-width: 0; }
+  .pl-name {
+    font-size: 13px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pl-item.active .pl-name { color: var(--accent); }
+  .pl-meta { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .pl-del {
+    flex: 0 0 auto; border: 0; background: none; color: var(--ink-3);
+    cursor: pointer; font-size: 15px; line-height: 1; padding: 3px 5px;
+    border-radius: 4px; opacity: 0;
+  }
+  .pl-item:hover .pl-del { opacity: 1; }
+  .pl-del:hover { color: var(--danger); background: var(--danger-soft); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px; margin-bottom: 12px;
+    transition: border-color .15s, background .15s;
+  }
+  .card.over { border-color: var(--accent); background: var(--accent-soft); }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .label { font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
+
+  .paste {
+    width: 100%; min-height: 120px; resize: vertical;
+    padding: 10px 12px; font: inherit; font-size: 14px; line-height: 1.65;
+    color: var(--ink); background: var(--card);
+    border: 1px solid var(--line); border-radius: 8px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .paste::placeholder { color: var(--ink-3); }
+  .paste:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .paste-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-top: 10px;
+  }
+  .btn-primary {
+    flex: 0 0 auto; padding: 8px 18px; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff;
+    font: inherit; font-size: 14px; cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn-primary:hover:not(:disabled) { opacity: .88; }
+  .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+
+  .link {
+    font-size: 13px; color: var(--accent); cursor: pointer;
+    background: none; border: 0; padding: 0; font-family: inherit;
+  }
+  .link:hover { text-decoration: underline; }
+
+  .row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .field { flex: 1 1 180px; min-width: 150px; }
+
+  .dd { position: relative; margin-top: 6px; }
+  .dd-btn {
+    width: 100%; display: flex; align-items: center; gap: 8px;
+    padding: 9px 10px; font: inherit; font-size: 14px; color: var(--ink);
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; cursor: pointer; text-align: left;
+  }
+  .dd-btn:hover { border-color: var(--ink-3); }
+  .dd-btn[aria-expanded="true"] { border-color: var(--accent); outline: 2px solid var(--accent-soft); }
+  .dd-value { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-chev { flex: 0 0 auto; color: var(--ink-3); transition: transform .15s; }
+  .dd-btn[aria-expanded="true"] .dd-chev { transform: rotate(180deg); }
+  .dd-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+    max-height: 260px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 4px;
+    box-shadow: 0 8px 28px rgba(44, 44, 42, .12);
+  }
+  .dd-menu[hidden] { display: none; }
+  .dd.up .dd-menu { top: auto; bottom: calc(100% + 4px); }
+  .dd-item {
+    padding: 8px 10px; font-size: 14px; color: var(--ink-2);
+    border-radius: 6px; cursor: pointer; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .dd-item:hover { background: var(--line-soft); color: var(--ink); }
+  .dd-item.sel { color: var(--accent); font-weight: 500; background: var(--accent-soft); }
+
+  .player { display: flex; align-items: center; gap: 16px; }
+  .play-btn {
+    flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%;
+    border: 0; background: var(--accent); color: #fff; cursor: pointer;
+    display: grid; place-items: center; transition: transform .1s, opacity .15s;
+  }
+  .play-btn:hover:not(:disabled) { transform: scale(1.04); }
+  .play-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .play-btn svg { width: 20px; height: 20px; fill: currentColor; }
+  .track-area { flex: 1; min-width: 0; }
+  .bar {
+    height: 6px; background: var(--line-soft); border-radius: 3px;
+    overflow: hidden; margin-bottom: 8px;
+  }
+  .bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width .1s linear; }
+  .times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .dl-btn { flex: 0 0 auto; white-space: nowrap; }
+  .dl-btn.busy { color: var(--danger); }
+  .dl-btn:disabled { color: var(--ink-3); cursor: not-allowed; text-decoration: none; }
+
+  details { margin-top: 4px; }
+  summary {
+    font-size: 13px; color: var(--ink-2); cursor: pointer;
+    padding: 6px 0; list-style: none; user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸ "; color: var(--ink-3); }
+  details[open] summary::before { content: "▾ "; }
+  .chunks { margin-top: 8px; max-height: 300px; overflow-y: auto; }
+  .chunk {
+    font-size: 13px; line-height: 1.55; color: var(--ink-2);
+    padding: 7px 10px; border-radius: 6px; border-left: 2px solid transparent;
+    cursor: pointer;
+    transition: background .12s, color .12s, font-size .16s ease, padding .16s ease;
+  }
+  .chunk:hover { background: var(--line-soft); color: var(--ink); }
+  .chunk .n { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .chunk.para::after { content: " ¶"; color: var(--accent); }
+  /* 正在朗读的那一块：放大 + 加粗，读到哪里一眼能跟上 */
+  .chunk.active {
+    background: var(--accent-soft);
+    border-left-color: var(--accent);
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 500;
+    padding: 9px 10px;
+  }
+
+  .notes { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
+  .note { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 6px; }
+  .note:hover { background: var(--line-soft); }
+  .note-time {
+    flex: 0 0 auto; border: 0; background: none; padding: 3px 5px; border-radius: 4px;
+    font: inherit; font-size: 12px; color: var(--accent); cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  .note-time:hover { background: var(--accent-soft); }
+  .note-text {
+    flex: 1; min-width: 0; border: 0; background: none; padding: 5px 2px;
+    font: inherit; font-size: 13px; color: var(--ink); outline: none;
+  }
+  .note-text::placeholder { color: var(--ink-3); }
+  .note-del {
+    flex: 0 0 auto; border: 0; background: none; color: var(--ink-3);
+    cursor: pointer; font-size: 15px; line-height: 1; padding: 3px 5px;
+    border-radius: 4px; opacity: 0;
+  }
+  .note:hover .note-del { opacity: 1; }
+  .note-del:hover { color: var(--danger); background: var(--danger-soft); }
+  .note-empty { font-size: 12px; color: var(--ink-3); padding: 4px 6px; }
+
+  .alert {
+    display: none; padding: 11px 14px; border-radius: 8px; font-size: 13px;
+    background: var(--danger-soft); color: var(--danger); margin-bottom: 12px;
+    border: 1px solid #F7C1C1;
+  }
+  .alert.show { display: block; }
+  .hint { font-size: 12px; color: var(--ink-3); margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>本地朗读</h1>
+  <p class="sub">粘贴一段文字 → 本地 Phonon 合成 → 浏览器播放。全程不出这台机器。</p>
+
+  <div class="alert" id="alert"></div>
+
+  <div class="layout">
+    <aside class="side">
+      <div class="side-head">
+        <span class="label">播放列表</span>
+        <span class="head-actions">
+          <button class="link" id="addFileBtn">＋ 文件</button>
+          <button class="link" id="addBtn">＋ 粘贴</button>
+        </span>
+      </div>
+      <div class="playlist" id="playlist"></div>
+      <input type="file" id="fileInput" accept=".pdf,.txt,.text,.md,.markdown" multiple hidden>
+    </aside>
+
+    <main>
+      <div class="card" id="inputCard">
+        <div class="card-head">
+          <span class="label">粘贴文字</span>
+          <span class="hint" id="charCount" style="margin:0"></span>
+        </div>
+        <textarea id="pasteBox" class="paste" rows="5"
+          placeholder="把要朗读的文字粘贴到这里…&#10;支持英 / 法 / 德 / 西 / 葡五种语言&#10;也可以把 PDF / TXT / MD 文件拖进来"></textarea>
+        <div class="paste-foot">
+          <span class="hint" id="pasteHint" style="margin:0">⌘ + Enter 也可以直接添加</span>
+          <button class="btn-primary" id="addText" disabled>添加并朗读</button>
+        </div>
+      </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <span class="label">音色</span>
+        <div class="dd" id="voiceDD">
+          <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span class="dd-value">加载中…</span>
+            <svg class="dd-chev" viewBox="0 0 12 12" width="12" height="12"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="dd-menu" role="listbox" hidden></div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="label">模型</span>
+        <div class="dd" id="modelDD">
+          <button type="button" class="dd-btn" aria-haspopup="listbox" aria-expanded="false">
+            <span class="dd-value">phonon</span>
+            <svg class="dd-chev" viewBox="0 0 12 12" width="12" height="12"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="dd-menu" role="listbox" hidden></div>
+        </div>
+      </div>
+      <button class="link" id="preview" style="padding-bottom:11px">试听</button>
+    </div>
+    <p class="hint" id="voiceHint">音色库里还有几个角色音色，读故事时挺有意思。</p>
+  </div>
+
+  <div class="card">
+    <div class="player">
+      <button class="play-btn" id="playBtn" disabled aria-label="播放">
+        <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <div class="track-area">
+        <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+        <div class="times">
+          <span id="timeText">00:00 / 约 00:00</span>
+          <span id="segText">第 0 / 0 段</span>
+        </div>
+      </div>
+      <button class="link dl-btn" id="download" disabled>下载 MP3</button>
+    </div>
+  </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="label">笔记 <span id="noteCount"></span></span>
+          <span class="head-actions">
+            <button class="link" id="copyNotes" disabled>复制</button>
+            <button class="link" id="addNote" disabled>＋ 记笔记</button>
+          </span>
+        </div>
+        <div class="notes" id="notes"></div>
+      </div>
+
+      <div class="card">
+        <details>
+          <summary>查看分段文本（点击任意段落，从那里开始播放）</summary>
+          <div class="chunks" id="chunks"></div>
+        </details>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

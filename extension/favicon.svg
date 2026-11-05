@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="本地朗读">
+  <rect width="32" height="32" rx="7" fill="#185FA5"/>
+  <g fill="#FFFFFF">
+    <rect x="8" y="13" width="3" height="6" rx="1.5"/>
+    <rect x="14.5" y="9" width="3" height="14" rx="1.5"/>
+    <rect x="21" y="11.5" width="3" height="9" rx="1.5"/>
+  </g>
+</svg>

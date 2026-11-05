@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 320px; margin: 0; padding: 16px; box-sizing: border-box;
+         font: 13px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         color: #2C2C2A; background: #FBFAF7; }
+  h1 { font-size: 15px; font-weight: 500; margin: 0 0 10px; }
+  .status { font-size: 12px; padding: 7px 10px; border-radius: 8px; margin-bottom: 12px; }
+  .status.ok { background: #E1F5EE; color: #0F6E56; }
+  .status.bad { background: #FCEBEB; color: #A32D2D; }
+  .status.wait { background: #F1EFE8; color: #5F5E5A; }
+  .label { font-size: 12px; color: #5F5E5A; margin-bottom: 5px; }
+  .preview { background: #fff; border: 1px solid #E4E1D9; border-radius: 8px;
+             padding: 9px 10px; max-height: 96px; overflow: auto; font-size: 12px;
+             color: #2C2C2A; word-break: break-word; white-space: pre-wrap; margin-bottom: 12px; }
+  .preview.empty { color: #888780; }
+  button { display: block; width: 100%; padding: 9px 12px; margin-bottom: 8px;
+           border: 1px solid #185FA5; border-radius: 8px; background: #185FA5;
+           color: #fff; font-size: 13px; cursor: pointer; text-align: center; }
+  button:hover:not(:disabled) { background: #0C447C; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.ghost { background: #fff; color: #185FA5; }
+  button.ghost:hover:not(:disabled) { background: #E6F1FB; }
+  .tip { font-size: 11px; color: #888780; margin: 10px 0 0; }
+  code { font-family: ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+  <h1>本地朗读</h1>
+  <div id="status" class="status wait">正在检查服务…</div>
+  <div class="label">当前选中文字</div>
+  <div id="preview" class="preview empty">（未选中文字）</div>
+  <button id="sel" disabled>朗读所选文字</button>
+  <button id="page" disabled>朗读整页正文</button>
+  <button id="open" class="ghost">打开完整阅读器</button>
+  <p class="tip">服务地址 <code>http://127.0.0.1:8765</code> · 需先启动朗读服务</p>
+  <script src="popup.js"></script>
+</body>
+</html>

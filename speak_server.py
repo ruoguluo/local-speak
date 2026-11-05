@@ -304,8 +304,40 @@ def build_doc_from_text(text: str, name: str | None = None) -> tuple[Doc | None,
     return finalize([text], "粘贴文本", name or derive_name(text), False, min_chars=1)
 
 
+_CORS_LOCAL = re.compile(r"^http://(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$")
+_CORS_LAN = re.compile(
+    r"^http://(10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$"
+)
+
+
+def _cors_allowed(origin: str) -> bool:
+    """只回显可信 Origin：本机 / 局域网网页与已安装的 Chrome 扩展。
+
+    不回显陌生公网 Origin，避免任意网站借用户浏览器读到本机服务。
+    注意：Chrome 扩展页面是 chrome-extension://，请求 127.0.0.1 属于
+    私有网络访问，预检还会要求 Access-Control-Allow-Private-Network。
+    """
+    if origin.startswith("chrome-extension://"):
+        return True
+    return bool(_CORS_LOCAL.match(origin) or _CORS_LAN.match(origin))
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "SpeakServer/1.0"
+
+    def end_headers(self) -> None:
+        """统一注入 CORS / PNA 头，覆盖所有响应、预检与流式导出。"""
+        origin = self.headers.get("Origin")
+        if origin and _cors_allowed(origin):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Credentials", "true")
+            self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        super().end_headers()
 
     def log_message(self, fmt: str, *args) -> None:
         # 必须先格式化再判断：send_error 会把 HTTPStatus 枚举塞进 args[0]，
@@ -380,8 +412,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_OPTIONS(self) -> None:
+        # 跨源预检（Chrome 插件 / 局域网页面）由 end_headers 统一注入 CORS 头
         self.send_response(204)
         self.send_header("Allow", "GET, HEAD, POST, OPTIONS")
+        self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Content-Length", "0")
         self.end_headers()
 
@@ -406,6 +440,15 @@ class Handler(BaseHTTPRequestHandler):
             if not page.exists():
                 return self.send_json({"error": "缺少 web/index.html"}, 500)
             return self.send_bytes(page.read_bytes(), "text/html; charset=utf-8")
+
+        # 前端脚本单独成文件：扩展页面受 MV3 CSP 约束，不能再内联脚本
+        if path == "/app.js":
+            script = WEB / "app.js"
+            if not script.exists():
+                return self.send_json({"error": "缺少 web/app.js"}, 500)
+            return self.send_bytes(
+                script.read_bytes(), "application/javascript; charset=utf-8", cache=True
+            )
 
         if path == "/api/voices":
             q = parse_qs(urlparse(self.path).query)

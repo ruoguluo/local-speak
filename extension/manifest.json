@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "本地朗读 · Local Speak",
+  "version": "1.0.0",
+  "description": "选中网页文字，用本机的 Ollama phonon 语音朗读。需先启动本地朗读服务 (127.0.0.1:8765)。",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "本地朗读"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
