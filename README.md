@@ -112,6 +112,36 @@ python3 extension/sync.py
 - 自动打开阅读器时浏览器可能拦截自动播放，若没有声音点一下页面播放按钮即可
 - `chrome://`、扩展商店等浏览器内部页面无法注入脚本，提不到选中文字或正文
 
+## macOS 服务（在「预览」等 App 里朗读所选文字）
+
+在预览、Safari、邮件等任意 App 里选中文字 → 右键 →「服务」→「朗读所选文字」，音频直接从本机播出，不弹浏览器、不抢焦点；「停止朗读」可随时打断。每次新选择也会自动停掉上一段。
+
+### 安装
+
+双击 `macos-service/安装朗读服务.command`，或在项目目录执行：
+
+```bash
+python3 macos-service/install_service.py            # 安装
+python3 macos-service/install_service.py --uninstall # 卸载
+```
+
+安装器在 `~/Library/Services/` 生成两个 Automator Quick Action（Info.plist 里用 `NSServices` 声明接收 `public.utf8-plain-text`，`document.wflow` 里只有一个「运行 Shell 脚本」动作，把选中文字从 stdin 送进 `speak_selection.py`），然后跑 `pbs -flush` / `-update` 刷新系统服务缓存。
+
+如果右键菜单里没出现：系统设置 → 键盘 → 键盘快捷键… → 服务 → 文本，勾选「朗读所选文字」。在那里绑一个快捷键通常比右键更可靠——个别 App 不显示「服务」子菜单。仍未出现就注销后重新登录。
+
+### 与 Web 版的区别
+
+| | Web / Chrome 插件 | macOS 服务 |
+|---|---|---|
+| 入口 | 浏览器 | 任意 App 的右键「服务」/ 快捷键 |
+| 依赖 | `speak_server.py` 必须先启动 | 只需 Ollama 在跑 |
+| 播放 | Web Audio，有播放列表、暂停、笔记、导出 MP3 | `sounddevice` 直出，无 UI |
+| 自动播放 | 可能被浏览器策略拦住，需点一下播放 | 不经过浏览器，直接出声 |
+
+服务链路复用 `pdf_speak.py` 的断句与 Phonon 合成，以及 `speak_server.detect_lang` 的语种判定：检测到法语 / 西语等且对应模型已安装时自动切模型，否则退回 `phonon`。想固定模型或音色，在 `macos-service/install_service.py` 生成的 `COMMAND_STRING` 里给 python 加上 `SPEAK_MODEL=... SPEAK_VOICE=...` 环境变量后重新安装。
+
+日志在 `~/Library/Logs/localread-service.log`；中文内容、Ollama 未启动等错误还会通过系统通知提示。
+
 ## 多语言
 
 Phonon 按语言分模型，**每个语言模型还有自己独立的音色库**：
@@ -175,6 +205,11 @@ extension/             Chrome 插件（MV3，见上文）
   config.js            注入 SPEAK_API_BASE
   reader.html/app.js   完整阅读器（由 sync.py 从 web/ 同步）
   sync.py              改动前端后同步扩展副本
+macos-service/         macOS 文本服务（见上文）
+  install_service.py   生成 / 安装 / 卸载 Quick Action
+  RunShellScript.wflow Automator「运行 Shell 脚本」模板
+  speak_selection.py   stdin 选中文字 → Phonon → 直接播放
+  安装朗读服务.command  双击安装
 sample.txt             测试用纯文本（含断字、列表、分隔线）
 sample.pdf             测试用 PDF（含页眉、页码、硬换行）
 启动朗读.command        双击启动，仅本机
