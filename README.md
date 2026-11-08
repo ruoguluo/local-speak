@@ -114,20 +114,27 @@ python3 extension/sync.py
 
 ## macOS 服务（在「预览」等 App 里朗读所选文字）
 
-在预览、Safari、邮件等任意 App 里选中文字 → 右键 →「服务」→「朗读所选文字」，音频直接从本机播出，不弹浏览器、不抢焦点；「停止朗读」可随时打断。每次新选择也会自动停掉上一段。
+在预览、Safari、邮件等任意 App 里选中文字，按 **⌃⌥⌘S** 即开始朗读；也可以右键 →「服务」→「朗读所选文字」。音频直接从本机播出，不弹浏览器、不抢焦点；「停止朗读」可随时打断，每次新选择也会自动停掉上一段。
 
 ### 安装
 
 双击 `macos-service/安装朗读服务.command`，或在项目目录执行：
 
 ```bash
-python3 macos-service/install_service.py            # 安装
-python3 macos-service/install_service.py --uninstall # 卸载
+python3 macos-service/install_service.py                        # 安装，默认快捷键 ⌃⌥⌘S
+python3 macos-service/install_service.py --shortcut '~@r'       # 改成 ⌥⌘R
+python3 macos-service/install_service.py --shortcut ''          # 不设快捷键
+python3 macos-service/install_service.py --shortcut-stop '^~@x' # 顺带给「停止朗读」设 ⌃⌥⌘X
+python3 macos-service/install_service.py --uninstall            # 卸载
 ```
 
 安装器在 `~/Library/Services/` 生成两个 Automator Quick Action（Info.plist 里用 `NSServices` 声明接收 `public.utf8-plain-text`，`document.wflow` 里只有一个「运行 Shell 脚本」动作，把选中文字从 stdin 送进 `speak_selection.py`），然后跑 `pbs -flush` / `-update` 刷新系统服务缓存。
 
-如果右键菜单里没出现：系统设置 → 键盘 → 键盘快捷键… → 服务 → 文本，勾选「朗读所选文字」。在那里绑一个快捷键通常比右键更可靠——个别 App 不显示「服务」子菜单。仍未出现就注销后重新登录。
+快捷键写在 `NSServices` 的 `NSKeyEquivalent` 里，由 `pbs` 读取，因此会跟着仓库走、每台机器安装后自动生效。修饰键编码：`@` = ⌘、`^` = ⌃、`~` = ⌥、`$` = ⇧；字母用小写，避免被 Cocoa 当成隐含 Shift。之后在「系统设置 → 键盘 → 键盘快捷键… → 服务 → 文本」里改过的值会覆盖这个默认值。
+
+「停止朗读」默认不设快捷键：文本型服务只有在当前有选中文字时才可用，读完点掉选区后再按会失效。需要的话用 `--shortcut-stop`，或继续用右键菜单。
+
+如果快捷键或右键菜单没生效：系统设置 → 键盘 → 键盘快捷键… → 服务 → 文本，确认「朗读所选文字」已勾选，并在这里查看实际显示的组合键（应用自身的同名快捷键优先于服务快捷键，冲突时改一个即可）。仍未出现就注销后重新登录。
 
 ### 与 Web 版的区别
 
